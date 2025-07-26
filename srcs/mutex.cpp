@@ -2,9 +2,10 @@
 
 namespace Cot {
 //todo::exception handler
+
 Semaphore::Semaphore(uint32_t count)
 {
-    if (sem_init(&m_semaphore, 0, count) != 0)
+    if (sem_init(&sem_, 0, count) != 0)
     {
         // throw std::logic_error("sem_init error");
     }
@@ -12,20 +13,20 @@ Semaphore::Semaphore(uint32_t count)
 
 Semaphore::~Semaphore()
 {
-    sem_destroy(&m_semaphore);
+    sem_destroy(&sem_);
 }
 
-void Semaphore::wait()
+void Semaphore::Wait()
 {
-    if (sem_wait(&m_semaphore) != 0)
+    if (sem_wait(&sem_) != 0)
     {
         // throw std::logic_error("sem_wait error");
     }
 }
 
-void Semaphore::notify()
+void Semaphore::Notify()
 {
-    if (sem_post(&m_semaphore) != 0)
+    if (sem_post(&sem_) != 0)
     {
         // throw std::logic_error("sem_post error");
     }

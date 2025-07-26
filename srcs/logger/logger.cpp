@@ -13,7 +13,6 @@ Logger::Logger(std::string name)
     : name_(std::move(name))
     , level_(Level::DEBUG)
     , create_time_(UtilT::GetElapseMs())
-
 {
 
 }

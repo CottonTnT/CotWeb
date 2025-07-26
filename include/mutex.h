@@ -1,12 +1,11 @@
 #ifndef __SYLAR_MUTEX_GUARD__
 #define __SYLAR_MUTEX_GUARD__
 
-#include "noncopyable.h"
+#include <assert.h>
+#include <cstdint>
 #include <pthread.h>
 #include <semaphore.h>
-#include <cstdint>
-#include <mutex>
-#include <assert.h>
+#include <type_traits>
 
 #define MCHECK(ret) ({ decltype(ret) errnum = (ret);         \
                        assert(errnum == 0); (void) errnum; })
@@ -20,14 +19,18 @@
 
 namespace Cot {
 
-class Semaphore : NonCopyable {
+class Semaphore {
 public:
     /**
      * @brief 构造函数
      * @param[in] count 信号量值的大小
      */
-    Semaphore(uint32_t count = 0);
+    explicit Semaphore(uint32_t count = 0);
 
+    Semaphore(const Semaphore&)            = delete;
+    Semaphore(Semaphore&&)                 = delete;
+    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore& operator=(Semaphore&&)      = delete;
     /**
      * @brief 析构函数
      */
@@ -36,154 +39,170 @@ public:
     /**
      * @brief 获取信号量
      */
-    void wait();
+    void Wait();
 
     /**
      * @brief 释放信号量
      */
-    void notify();
+    void Notify();
 
 private:
-    sem_t m_semaphore;
+    sem_t sem_;
 };
 
 /**
  * @brief 普通锁
  */
-class Mutex : NonCopyOrMoveable {
+class Mutex {
 public:
-    /// 局部锁
     /**
      * @brief 构造函数
      */
     Mutex()
     {
-        pthread_mutex_init(&m_mutex_, nullptr);
+        pthread_mutex_init(&mtx_, nullptr);
     }
 
+    Mutex(const Mutex&)            = default;
+    Mutex(Mutex&&)                 = delete;
+    Mutex& operator=(const Mutex&) = default;
+    Mutex& operator=(Mutex&&)      = delete;
     /**
      * @brief 析构函数
      */
     ~Mutex()
     {
-        pthread_mutex_destroy(&m_mutex_);
+        pthread_mutex_destroy(&mtx_);
     }
 
     /**
      * @brief 加锁
      */
-    void lock()
+    void Lock()
     {
-        pthread_mutex_lock(&m_mutex_);
+        pthread_mutex_lock(&mtx_);
     }
 
     /**
      * @brief 解锁
      */
-    void unlock()
+    void Unlock()
     {
-        pthread_mutex_unlock(&m_mutex_);
+        pthread_mutex_unlock(&mtx_);
     }
 
-    auto getPthreadMutex()
+    auto GetPthreadMutex()
         -> pthread_mutex_t*
     {
-        return &m_mutex_;
+        return &mtx_;
     }
 
 private:
     /// mutex
-    pthread_mutex_t m_mutex_;
+    pthread_mutex_t mtx_;
 };
 
 /**
  * @brief 自旋锁
  */
-class SpinMutex : NonCopyOrMoveable {
+class SpinMutex{
 public:
-    /**
-     * @brief 构造函数
-     */
+
     SpinMutex()
     {
-        pthread_spin_init(&m_mutex, 0);
+        pthread_spin_init(&mtx_, 0);
     }
 
+    SpinMutex(const SpinMutex&)            = delete;
+    SpinMutex(SpinMutex&&)                 = delete;
+    SpinMutex& operator=(const SpinMutex&) = delete;
+    SpinMutex& operator=(SpinMutex&&)      = delete;
     /**
      * @brief 析构函数
      */
     ~SpinMutex()
     {
-        pthread_spin_destroy(&m_mutex);
+        pthread_spin_destroy(&mtx_);
     }
 
     /**
      * @brief 上锁
      */
-    void lock()
+    void Lock()
     {
-        pthread_spin_lock(&m_mutex);
+        pthread_spin_lock(&mtx_);
     }
 
     /**
      * @brief 解锁
      */
-    void unlock()
+    void Unlock()
     {
-        pthread_spin_unlock(&m_mutex);
+        pthread_spin_unlock(&mtx_);
     }
 
 private:
     /// 自旋锁
-    pthread_spinlock_t m_mutex;
+    pthread_spinlock_t mtx_;
 };
 
-class RWMutex : NonCopyOrMoveable {
+class RWMutex{
 public:
     RWMutex()
     {
-        pthread_rwlock_init(&m_lock, nullptr);
+        pthread_rwlock_init(&lock_, nullptr);
     }
 
-    void rdlock()
+    RWMutex(const RWMutex&)            = default;
+    RWMutex(RWMutex&&)                 = delete;
+    RWMutex& operator=(const RWMutex&) = default;
+    RWMutex& operator=(RWMutex&&)      = delete;
+    void Rdlock()
     {
-        pthread_rwlock_rdlock(&m_lock);
+        pthread_rwlock_rdlock(&lock_);
     }
 
-    void wrlock()
+    void Wrlock()
     {
-        pthread_rwlock_wrlock(&m_lock);
+        pthread_rwlock_wrlock(&lock_);
     }
 
-    void unlock()
+    void Unlock()
     {
-        pthread_rwlock_unlock(&m_lock);
+        pthread_rwlock_unlock(&lock_);
     }
 
     ~RWMutex()
     {
-        pthread_rwlock_destroy(&m_lock);
+        pthread_rwlock_destroy(&lock_);
     }
 
 private:
-    pthread_rwlock_t m_lock;
+    pthread_rwlock_t lock_;
 };
 
 template <typename Mutex, typename LockTag = void>
-class LockGuard : NonCopyOrMoveable {
+class LockGuard{
 public:
+
     LockGuard(Mutex& mutex)
-        : m_mutex(mutex)
+        : mtx_(mutex)
     {
-        m_mutex.lock();
+        mtx_.lock();
     }
+
+    LockGuard(const LockGuard&)            = delete;
+    LockGuard(LockGuard&&)                 = delete;
+    LockGuard& operator=(const LockGuard&) = delete;
+    LockGuard& operator=(LockGuard&&)      = delete;
+
     ~LockGuard()
     {
-        m_mutex.unlock();
+        mtx_.unlock();
     }
 
 private:
-    Mutex& m_mutex;
+    Mutex& mtx_;
 };
 
 struct ReadLockTag
@@ -221,34 +240,67 @@ namespace {
 
     void _lockDispatch(RWMutex& mutex, WriteLockTag tag)
     {
-        mutex.wrlock();
+        mutex.Wrlock();
     }
 
     void _lockDispatch(RWMutex& mutex, ReadLockTag tag)
     {
-        mutex.rdlock();
+        mutex.Rdlock();
     }
 
 } //namespace
 
+/**
+ * @brief deprecated
+ */
+// template <typename LockTag>
+// class LockGuard<RWMutex, LockTag> {
+// public:
+//     explicit LockGuard(RWMutex& mutex)
+//         : m_mutex(mutex)
+//     {
+//         _lockDispatch(m_mutex, LockTag());
+//     }
+
+//     ~LockGuard()
+//     {
+//         _unlockDispatch(m_mutex, LockTag());
+//     }
+
+// private:
+//     RWMutex& m_mutex;
+//     bool m_locked = false;
+// };
+
 template <typename LockTag>
 class LockGuard<RWMutex, LockTag> {
 public:
+    LockGuard(const LockGuard&)            = delete;
+    LockGuard(LockGuard&&)                 = delete;
+    LockGuard& operator=(const LockGuard&) = delete;
+    LockGuard& operator=(LockGuard&&)      = delete;
+
     explicit LockGuard(RWMutex& mutex)
-        : m_mutex(mutex)
+        : mtx_(mutex)
     {
-        _lockDispatch(m_mutex, LockTag());
+        if constexpr(std::is_same_v<LockTag,  ReadLockTag>)
+            mtx_.Rdlock();
+        else
+            mtx_.Wrlock();
+        locked_ = true;
     }
 
     ~LockGuard()
     {
-        _unlockDispatch(m_mutex, LockTag());
+        mtx_.Unlock();
     }
 
 private:
-    RWMutex& m_mutex;
-    bool m_locked = false;
+    RWMutex& mtx_;
+    bool locked_ = false;
 };
+
+
 
 } //namespace Cot
 
