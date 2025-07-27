@@ -153,9 +153,9 @@ public:
         pthread_rwlock_init(&lock_, nullptr);
     }
 
-    RWMutex(const RWMutex&)            = default;
+    RWMutex(const RWMutex&)            = delete;
     RWMutex(RWMutex&&)                 = delete;
-    RWMutex& operator=(const RWMutex&) = default;
+    RWMutex& operator=(const RWMutex&) = delete;
     RWMutex& operator=(RWMutex&&)      = delete;
     void Rdlock()
     {
@@ -188,7 +188,7 @@ public:
     LockGuard(Mutex& mutex)
         : mtx_(mutex)
     {
-        mtx_.lock();
+        mtx_.Lock();
     }
 
     LockGuard(const LockGuard&)            = delete;
@@ -198,7 +198,7 @@ public:
 
     ~LockGuard()
     {
-        mtx_.unlock();
+        mtx_.Unlock();
     }
 
 private:
@@ -213,64 +213,7 @@ struct WriteLockTag
 {
 };
 
-namespace {
 
-    template <typename MutexType>
-    void _lockDispatch(MutexType& mutex, WriteLockTag)
-    {
-        mutex.lock();
-    }
-    template <typename MutexType>
-    void _lockDispatch(MutexType& mutex, ReadLockTag tag)
-    {
-        mutex.lock();
-    }
-
-    template <typename MutexType>
-    void _unlockDispatch(MutexType& mutex, WriteLockTag tag)
-    {
-        mutex.unlock();
-    }
-
-    template <typename MutexType>
-    void _unlockDispatch(MutexType& mutex, ReadLockTag tag)
-    {
-        mutex.unlock();
-    }
-
-    void _lockDispatch(RWMutex& mutex, WriteLockTag tag)
-    {
-        mutex.Wrlock();
-    }
-
-    void _lockDispatch(RWMutex& mutex, ReadLockTag tag)
-    {
-        mutex.Rdlock();
-    }
-
-} //namespace
-
-/**
- * @brief deprecated
- */
-// template <typename LockTag>
-// class LockGuard<RWMutex, LockTag> {
-// public:
-//     explicit LockGuard(RWMutex& mutex)
-//         : m_mutex(mutex)
-//     {
-//         _lockDispatch(m_mutex, LockTag());
-//     }
-
-//     ~LockGuard()
-//     {
-//         _unlockDispatch(m_mutex, LockTag());
-//     }
-
-// private:
-//     RWMutex& m_mutex;
-//     bool m_locked = false;
-// };
 
 template <typename LockTag>
 class LockGuard<RWMutex, LockTag> {

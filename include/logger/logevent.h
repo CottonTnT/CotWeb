@@ -17,13 +17,13 @@ public:
      * @brief 构造函数
      * @param[in] logger_name 日志器名称
      * @param[in] level 日志级别
-     * @param[in] filename 文件名
      * @param[in] line 文件行号
+     * @param[in] filename 文件名
      * @param[in] elapse 程序启动依赖的耗时(毫秒)
      * @param[in] thread_id 线程id
-     * @param[in] fiber_id 协程id
-     * @param[in] time 日志事件(UTC秒)
      * @param[in] thread_name 线程名称
+     * @param[in] time 日志事件(UTC秒)
+     * @param[in] co_id 协程id
      */
     Event(std::string_view logger_name,
           Level loglevel,
@@ -47,7 +47,7 @@ public:
     auto GetFiberId() const
         -> uint32_t { return co_id_; }
     auto GetTime() const
-        -> uint64_t { return timestamp_; }
+        -> std::time_t { return timestamp_; }
 
     auto GetThreadName() const
         -> std::string_view { return thread_name_; }
@@ -55,23 +55,23 @@ public:
         -> std::string_view { return logger_name_; }
 
     auto GetContent() const
-        -> std::string { return content_stream_.str(); }
+        -> std::string { return custom_msg_.str(); }
 
     auto GetSS()
-        -> std::stringstream& { return content_stream_; }
+        -> std::stringstream& { return custom_msg_; }
 
     auto GetLevel() const
         -> Level { return loglevel_; }
 
     /**
-     * @todo use template vargs to format
+     * @todo use std::format to replace this
+     * @brief add some custom message to content_
      */
     void Printf(const char* fmt, ...);
 
 private:
-    void VPrintf(const char* fmt, va_list al);
+    void VPrintf_(const char* fmt, va_list al);
 
-private:
     std::string logger_name_;
     Level loglevel_ {Level::DEBUG};
     uint32_t line_number_ {};
@@ -82,20 +82,20 @@ private:
     uint32_t co_id_ {};
     // std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> time_stamp_;
     std::time_t timestamp_ {};
-    std::stringstream content_stream_;
+    std::stringstream custom_msg_;
 };
 
 class Logger;
-
 /**
  * @brief 利用RAII输出日志
  */
 class LogGuard {
 public:
-    LogGuard(const LogGuard&)            = default;
-    LogGuard(LogGuard&&)                 = default;
-    LogGuard& operator=(const LogGuard&) = default;
-    LogGuard& operator=(LogGuard&&)      = default;
+    LogGuard(const LogGuard&)            = delete;
+    LogGuard(LogGuard&&)                 = delete;
+    LogGuard& operator=(const LogGuard&) = delete;
+    LogGuard& operator=(LogGuard&&)      = delete;
+
     LogGuard(Sptr<Logger> logger, Sptr<Event> event);
     auto GetLogEvent() const
         -> Sptr<Event> { return event_; }
@@ -106,6 +106,6 @@ private:
     Sptr<Event> event_;
 };
 
-}
+} //namespace LogT
 
 #endif

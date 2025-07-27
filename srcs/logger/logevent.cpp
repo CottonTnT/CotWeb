@@ -2,6 +2,7 @@
 #include "logger/logger.h"
 #include "logger/loglevel.h"
 #include "util.h"
+#include <memory>
 
 namespace LogT {
 
@@ -31,26 +32,22 @@ void Event::Printf(const char* fmt, ...)
 {
     va_list al;
     va_start(al, fmt);
-    VPrintf(fmt, al);
+    VPrintf_(fmt, al);
     va_end(al);
 }
 
-void Event::VPrintf(const char* fmt, va_list al)
+void Event::VPrintf_(const char* fmt, va_list al)
 {
     char* buf = nullptr;
     int len   = vasprintf(&buf, fmt, al);
+    auto _ = std::unique_ptr<char>(buf);
     if (len != -1)
     {
-        auto call_guard = UtilT::CallGuard{
-            [buf]() -> void {
-                free(buf);
-            }
-        };
-        content_stream_ << std::string_view(buf, len);
+        custom_msg_ << std::string_view(buf, len);
     }
 }
 
-/* ======================== EventWrap ======================== */
+
 
 LogGuard::LogGuard(Sptr<Logger> logger, Sptr<Event> event)
         : logger_(logger)

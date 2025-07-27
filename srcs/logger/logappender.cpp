@@ -1,9 +1,10 @@
-#include "logger/logappender.hpp"
+
+#include "logger/logappender.h"
 namespace LogT{
 
 
 /* ======================== StdoutAppender ======================== */
-void StdoutAppender::Log(Sptr<FormatPattern> fmter, Sptr<Event> event)
+void StdoutAppender::Log(Sptr<LogFormatter> fmter, Sptr<Event> event)
 {
     fmter->Format(std::cout,  event);
     std::cout << event->GetContent();
@@ -13,13 +14,13 @@ void StdoutAppender::Log(Sptr<FormatPattern> fmter, Sptr<Event> event)
 /* ======================== FileAppender ======================== */
 
 //todo:exception
-FileAppender::FileAppender(std::string filename)
+FileAppender::FileAppender(std::string_view filename)
     : filename_(filename)
 {
     Reopen();
 }
 
-void FileAppender::Log(Sptr<FormatPattern> fmter, Sptr<Event> event)
+void FileAppender::Log(Sptr<LogFormatter> fmter, Sptr<Event> event)
 {
     filestream_ << fmter->Format(event);
     filestream_ << event->GetContent();

@@ -2,9 +2,6 @@
 #define __COT_SINGLETON_GUARD__
 #include "common.h"
 
-#include <memory>
-
-
 namespace Cot {
 
 
@@ -13,8 +10,8 @@ requires std::is_default_constructible_v<T>
 auto GetInstanceX()
     -> T&
 {
-    static auto s_entity = T{};
-    return s_entity;
+    static auto s_Entity = T{};
+    return s_Entity;
 }
 
 template <typename T, typename Tag, typename TagIdx>
@@ -22,8 +19,8 @@ requires std::is_default_constructible_v<T>
 auto GetInstanceSptr()
     -> Sptr<T>
 {
-    static auto s_entity_sptr = Sptr<T>(new T{});
-    return s_entity_sptr;
+    static auto s_Entity = Sptr<T>(new T{});
+    return s_Entity;
 }
 
 /**
@@ -41,8 +38,8 @@ public:
     static T& GetInstance()
     requires std::is_default_constructible_v<T>
     {
-        static auto s_entity = T();
-        return s_entity;
+        static auto s_Entity = T{};
+        return s_Entity;
         //return &GetInstanceX<T, X, N>();
     }
 
@@ -50,8 +47,8 @@ public:
     requires std::is_constructible_v<T,  Args...>
     static T& GetInstance(Args&&... args)
     {
-        static auto s_entity = T{std::forward<Args>(args)...};
-        return s_entity;
+        static auto s_Entity = T{std::forward<Args>(args)...};
+        return s_Entity;
         //return &GetInstanceX<T, X, N>();
     }
 };
@@ -74,9 +71,8 @@ public:
         -> Sptr<T>
     requires std::is_default_constructible_v<T>
     {
-        static Sptr<T> v(new T);
-        return v;
-        //return GetInstancePtr<T, X, N>();
+        static auto s_Entity = Sptr<T> {new T};
+        return s_Entity;
     }
 
     template <typename...Args>
@@ -84,9 +80,8 @@ public:
     static auto GetInstance(Args&&... args)
         -> Sptr<T>
     {
-        static auto s_entity = Sptr<T>(new T{std::forward<Args>(args)...});
-        return s_entity;
-        //return &GetInstanceX<T, X, N>();
+        static auto s_Entity = Sptr<T>(new T{std::forward<Args>(args)...});
+        return s_Entity;
     }
 };
 

@@ -68,7 +68,7 @@ class AppenderProxyBase;
 class Logger : public std::enable_shared_from_this<Logger>
     , public Cot::NonCopyOrMoveable {
 public:
-    using MutexType =Cot::SpinMutex;
+    using MutexType = Cot::SpinMutex;
 
     explicit Logger(std::string name = "noname");
 
@@ -96,7 +96,7 @@ public:
 private:
     MutexType mtx_;
     std::string name_;                             // 日志器名称
-    Level level_;                                  // 日志级别
+    Level level_ = Level::DEBUG;                                  // 日志级别
     std::list<Sptr<AppenderProxyBase>> appenders_; // Appender集合
     uint64_t create_time_;                         // 创建时间
 };

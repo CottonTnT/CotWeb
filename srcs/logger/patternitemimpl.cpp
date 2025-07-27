@@ -3,7 +3,8 @@
 
 #include "functional"
 #include "logger/patternitembase.h"
-#include "logger/patternitem.hpp"
+#include "logger/patternitemproxy.hpp"
+#include <array>
 
 namespace LogT{
 
@@ -130,6 +131,7 @@ public:
 /**
  * @brief tab format
  */
+
 class TabFormatItem {
 public:
     static void Format(std::ostream& os, Sptr<Event> event)
@@ -147,49 +149,88 @@ public:
 };
 
 
+/* ======================== FormatItem with Status ======================== */
 /**
  * @brief 时间format
  */
 class DateTimeFormatItem {
 public:
-    //todo:exception
-    static void Format(std::ostream& os,
-                Sptr<Event> event,
-                std::string_view data_format)
+    DateTimeFormatItem(std::string_view date_format)
+        : date_format_(date_format)
     {
-        if (data_format.empty())
-        {
-            data_format = "%Y-%m-%d %H:%M:%S";
-        }
-        struct tm tm;
-        time_t time = event->GetTime();
-        localtime_r(&time, &tm);
-        char buf[64];
-        strftime(buf, sizeof(buf), data_format.data(), &tm);
-        os << buf;
     }
+
+    //todo:exception
+    void Format(std::ostream& os,
+                Sptr<Event> event)
+    {
+        auto time = event->GetTime();
+
+        struct tm tm;
+        localtime_r(&time, &tm);
+
+        auto  buf = std::array<char, 64>{};
+         
+        std::ignore = strftime(buf.data(), buf.size(), date_format_.c_str(), &tm);
+
+        os << buf.data();
+    }
+
+    auto GetSubpattern() &
+        -> const std::string&
+    {
+
+        return date_format_;
+    }
+
+    auto GetSubpattern() &&
+        -> std::string
+    {
+        return std::move(date_format_);
+    }
+
+private:
+    std::string date_format_ = "%Y-%m-%d %H:%M:%S";
 };
 
 
 class StringFormatItem {
 public:
+    StringFormatItem(std::string_view str)
+        : str_(str){}
+
     void Format(std::ostream& os,
-                Sptr<Event> event,
-                std::string_view str)
+                Sptr<Event> event)
     {
-        os << str;
+        os << str_;
     }
+
+    auto GetSubpattern() &
+        -> const std::string&
+    {
+        return str_;
+    }
+
+    auto GetSubpattern() &&
+        -> std::string
+    {
+        return std::move(str_);
+    }
+
+private:
+    std::string str_;
+
 };
 
-using ItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string)>;
+using ItemProduceFunc = std::function<Sptr<PatternItemProxyBase>()>;
 auto RegisterFormatItem()
     -> std::unordered_map<std::string, ItemProduceFunc>
 {
     auto func_map = std::unordered_map<std::string, ItemProduceFunc> {
 #define XX(str, ItemType) \
     {                      \
-        #str, [](std::string item) -> Sptr<PatternItemProxyBase> {\
-            return Sptr<PatternItemProxyBase>{new PatternItemProxy<ItemType>{std::move(item)}};              \
+        #str, []() -> Sptr<PatternItemProxyBase> {\
+            return Sptr<PatternItemProxyBase>{new PatternItemProxy<ItemType>{}};              \
         }\
     }\
 
@@ -206,34 +247,25 @@ auto RegisterFormatItem()
     XX(n, NewLineFormatItem),    // n:换行符
     XX(%, PercentSignFormatItem),    // n:换行符
 #undef XX
-    // {
-    //     "m", [](std::string item) -> Sptr<PatternItemProxyBase> {
-    //         return std::static_pointer_cast<PatternItemProxyBase>(std::make_shared< PatternItemProxy<MessageFormatItem>>(item));
-    //     }
-    //     }
-    // ,
 
-    // {
-    // "m", [](std::string item) -> Sptr<PatternItemProxyBase> {
-    //         return Sptr<PatternItemProxyBase>(new PatternItemProxy<MessageFormatItem> (item));
-    //     }
-    //     }
-    // };
     };
     return func_map;
 }
 
-using StatusItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string, std::string)>;
+using StatusItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string)>;
+
 auto RegisterFormatStatusItem()
     -> std::unordered_map<std::string, StatusItemProduceFunc>
 {
 
     return std::unordered_map<std::string, StatusItemProduceFunc>
     {
-#define XX(str, item_impl) \
-    {\
-        #str, [](std::string item, std::string sub_pattern) -> Sptr<PatternItemProxyBase> { \
-            return std::static_pointer_cast<PatternItemProxyBase>(std::make_shared<PatternItemProxy<item_impl>>(item, sub_pattern)); \
+
+#define XX(str, ItemType) \
+    {                      \
+        #str, [](std::string sub_pattern) \
+            -> Sptr<PatternItemProxyBase> { \
+                return std::static_pointer_cast<PatternItemProxyBase>(std::make_shared<PatternItemProxy<ItemType>>(sub_pattern)); \
         }\
     }\
 
@@ -241,12 +273,6 @@ auto RegisterFormatStatusItem()
     XX(str, StringFormatItem),
 
 #undef XX
-
-    // {
-    //     "d", [](std::string item, std::string sub_pattern) -> Sptr<PatternItemProxyBase> { 
-    //         return std::static_pointer_cast<PatternItemProxyBase>(std::make_shared<PatternItemProxy<DateTimeFormatItem>>(item, sub_pattern)); 
-    //     }
-    // },
 
     };
 }

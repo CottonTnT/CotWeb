@@ -2,11 +2,11 @@
 #include "common.h"
 namespace LogT{
 
-class FormatPattern;
+class LogFormatter;
 class Event;
 
 template <typename T>
-concept IsAppenderImpl = requires(T x, Sptr<FormatPattern> y, Sptr<Event> z) {
+concept IsAppenderImpl = requires(T x, Sptr<LogFormatter> y, Sptr<Event> z) {
     x.Log(y, z);
 };
 
@@ -17,9 +17,10 @@ concept IsNormalPatternItem = requires(T x, std::ostream y, Sptr<Event> z)
 };
 
 template <typename T>
-concept IsStatusPatternItem = requires(T x, std::ostream y, Sptr<Event> z, std::string str)
+concept IsStatusPatternItem = requires(T x, std::ostream y, Sptr<Event> z)
 {
-    x.Format(y, z, str);
+    x.Format(y, z);
+    x.GetSubpattern();
 };
 
 template <typename T>

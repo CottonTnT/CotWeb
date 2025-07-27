@@ -4,6 +4,7 @@
 
 #include <list>
 #include <print>
+#include <utility>
 
 namespace LogT {
 
@@ -29,22 +30,23 @@ class Event;
  *
  * 默认格式描述：年-月-日 时:分:秒 [累计运行毫秒数] \t 线程id \t 线程名称 \t 协程id \t [日志级别] \t [日志器名称] \t 文件名:行号 \t 日志消息 换行符
  */
-class FormatPattern {
+class LogFormatter {
 public:
-    explicit FormatPattern(std::string pattern = "%d{%Y-%m-%d %H:%M:%S} [%rms]%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n")
+    explicit LogFormatter(std::string  pattern = "%d{%Y-%m-%d %H:%M:%S} [%rms]%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n")
         : pattern_(std::move(pattern))
         , error_(false)
-
     {
         StartParse_();
     }
+
     auto Format(Sptr<Event> event)
         -> std::string;
 
     auto Format(std::ostream& os, Sptr<Event> event)
         -> void;
-    auto Show()
-        -> void;
+
+    // auto Show()
+    //     -> void;
 private:
     void StartParse_();
     std::string pattern_;

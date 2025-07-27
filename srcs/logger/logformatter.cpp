@@ -1,6 +1,6 @@
 
 #include "logger/logevent.h"
-#include "logger/logformatpattern.h"
+#include "logger/logformatter.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -21,25 +21,29 @@ namespace LogT {
 class PatternItemProxyBase;
 
 
-using ItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string)>;
+using ItemProduceFunc = std::function<Sptr<PatternItemProxyBase>()>;
+
 auto RegisterFormatItem()
     -> std::unordered_map<std::string, ItemProduceFunc>;
 
-using StatusItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string, std::string)>;
+using StatusItemProduceFunc = std::function<Sptr<PatternItemProxyBase>(std::string)>;
+
 auto RegisterFormatStatusItem()
     -> std::unordered_map<std::string, StatusItemProduceFunc>;
 
-void FormatPattern::StartParse_()
+void LogFormatter::StartParse_()
 {
-    static auto produce_func_map1 = []() -> std::unordered_map<std::string, ItemProduceFunc>{
+    static auto s_ProduceFuncMap1 = []() -> std::unordered_map<std::string, ItemProduceFunc>{
         return RegisterFormatItem();
     }();
 
-    static auto produce_func_map2 = []() -> std::unordered_map<std::string, StatusItemProduceFunc> {
+    static auto s_ProduceFuncMap2 = []() -> std::unordered_map<std::string, StatusItemProduceFunc> {
         return RegisterFormatStatusItem();
     }();
 
-    assert(produce_func_map1.size() != 0);
+
+
+    assert(s_ProduceFuncMap1.size() != 0);
     auto normal_str = std::string {}; // to store the normal str
     auto state = ParseState::NORMAL;
 
@@ -54,12 +58,8 @@ void FormatPattern::StartParse_()
                     i++;
                 }
                 if(not normal_str.empty()){
-                    auto produce_func = produce_func_map2["str"];
-                    pattern_items_.push_back(produce_func("str", normal_str));
-
-                    // pattern_items_.back()->SetItem(std::string("str"));
-                    // pattern_items_.back()->SetSubpattern(normal_str);
-
+                    auto produce_func = s_ProduceFuncMap2["str"];
+                    pattern_items_.push_back(produce_func(normal_str));
                 }
                 normal_str.clear();
 
@@ -71,25 +71,19 @@ void FormatPattern::StartParse_()
             }
             case ParseState::PATTERN: {
                 auto c = pattern_[i];
-                // if (c == '%')
-                // {
-                //     auto produce_func = item_map[std::string(1, c)];
-                //     pattern_items_.push_back(produce_func(std::string(1, c)));
-                //     break;
-                // }
                 if (i + 1 < pattern_.size() and pattern_[i + 1] == '{')//是否有subpattern
                 {
                     i ++;
                     state = ParseState::SUBPATTERN;
                     break;
                 }
-                if (produce_func_map1.find(std::to_string(c)) == produce_func_map1.end())
+                if (s_ProduceFuncMap1.find(std::to_string(c)) == s_ProduceFuncMap1.end())
                 {
                     //todo: exception
                 }
 
-                auto produce_func = produce_func_map1[std::string(1, c)];
-                pattern_items_.push_back(produce_func(std::string(1, c)));
+                auto produce_func = s_ProduceFuncMap1[std::string(1, c)];
+                pattern_items_.push_back(produce_func());
                 state = ParseState::NORMAL;
                 break;
             }
@@ -107,8 +101,8 @@ void FormatPattern::StartParse_()
                     error_ = true;
                     return;
                 }
-                auto produce_func = produce_func_map2[std::string(1, escape_c)];
-                pattern_items_.push_back(produce_func("str", sub_pattern));
+                auto produce_func = s_ProduceFuncMap2[std::string(1, escape_c)];
+                pattern_items_.push_back(produce_func(sub_pattern));
                 state = ParseState::NORMAL;
             }
         }
@@ -119,22 +113,24 @@ void FormatPattern::StartParse_()
 
     if (not normal_str.empty())
     {
-        auto produce_func = produce_func_map2["str"];
-        pattern_items_.push_back(produce_func("str", std::move(normal_str)));
+        auto produce_func = s_ProduceFuncMap2["str"];
+        pattern_items_.push_back(produce_func(std::move(normal_str)));
         state = ParseState::NORMAL;
     }
 }
 
-auto FormatPattern::Format(std::ostream& os, Sptr<Event> event)
+auto LogFormatter::Format(std::ostream& os, Sptr<Event> event)
     -> void
 {
+    std::cout << pattern_items_.size() << std::endl;
+
     for (auto i : pattern_items_)
     {
          i->Format(os, event);
     }
 }
 
-auto FormatPattern::Format(Sptr<Event> event)
+auto LogFormatter::Format(Sptr<Event> event)
     -> std::string
 {
     auto ss = std::stringstream{};
@@ -145,13 +141,13 @@ auto FormatPattern::Format(Sptr<Event> event)
     return ss.str();
 }
 
-auto FormatPattern::Show()
-    -> void
-{
-    for (auto& i : pattern_items_)
-    {
-        i->Show();
-    }
-}
+// auto LogFormatter::Show()
+//     -> void
+// {
+//     for (auto& i : pattern_items_)
+//     {
+//         i->Show();
+//     }
+// }
 
 } // namespace LogT

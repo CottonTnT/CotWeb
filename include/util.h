@@ -15,6 +15,7 @@ auto GetElapseMs()
 
 auto GetThreadId()
     -> pid_t;
+
 auto GetFiberId()
     -> pid_t;
 
@@ -42,14 +43,14 @@ private:
 
 using Hash_t = std::uint64_t;
 
-constexpr Hash_t HASH_BASE  = 0xCBF29CE484222325ULL;
-constexpr Hash_t HASH_PRIME = 0x100000001B3ULL;
+inline constexpr Hash_t c_HashBase  = 0xCBF29CE484222325ULL;
+inline constexpr Hash_t c_HashPrime = 0x100000001B3ULL;
 
 /**
  * @brief FNV-1a hash
  * 
  */
-constexpr auto cHashString(std::string_view str, Hash_t base = HASH_BASE, Hash_t prime = HASH_PRIME)
+constexpr auto cHashString(std::string_view str, Hash_t base = c_HashBase, Hash_t prime = c_HashPrime)
     -> Hash_t
 {
 

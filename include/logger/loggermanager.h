@@ -32,4 +32,5 @@ private:
 
 using LoggerMgr = Cot::Singleton<LoggerManager>;
 
+
 } //namespace LogT
