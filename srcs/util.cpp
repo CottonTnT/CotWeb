@@ -23,6 +23,9 @@ auto GetThreadId()
     return syscall(SYS_gettid);
 }
 
+/**
+ * @todo
+ */
 auto GetFiberId()
     -> pid_t
 {

@@ -8,6 +8,8 @@
 #include "logevent.h"
 #include "loglevel.h"
 #include "noncopyable.h"
+#include "util.h"
+
 
 /**
  * @brief 巧妙利用了宏，既做到了作用域的效果，也能继续 如 `COT_LOG_LEVEL(logger, level) << xxx`一样的输出
@@ -23,6 +25,7 @@
 #define COT_LOG_WARN(logger)  COT_LOG_LEVEL(logger, LogT::Level::WARN)
 #define COT_LOG_ERROR(logger) COT_LOG_LEVEL(logger, LogT::Level::ERROR)
 #define COT_LOG_FATAL(logger) COT_LOG_LEVEL(logger, LogT::Level::FATAL)
+#define COT_LOG_ALERT(logger) COT_LOG_LEVEL(logger, LogT::Level::ALERT)
 
 // /**
 //  * @brief 使用C printf方式将日志级别level的日志写入到logger

@@ -4,7 +4,12 @@
 #define __cpp_lib_expected 1
 
 #include <expected>
-#include <iostream>
+#include <unordered_set>
+#include <unordered_map>
+#include <cxxabi.h>
+
+#include <boost/lexical_cast.hpp>
+#include <yaml-cpp/yaml.h>
 
 
 namespace UtilT {
@@ -14,10 +19,10 @@ inline constexpr bool c_IsOneOfValues = ((c_X == c_XS) or ...);
 
 template <auto... c_ErrorFlag, typename Scall, typename... Args>
 requires(std::is_invocable_v<Scall, Args...>)
-auto SyscallWrapper(Scall scall, Args... args)
+auto SyscallWrapper(Scall scall, Args... args) 
     -> std::expected<std::invoke_result_t<Scall, Args...>, std::string>
 {
-    auto ret = scall(args...);
+    auto ret = scall(std::forward<Args>(args)...);
     if(( (ret == c_ErrorFlag) or ... ))
     {
         auto ec = std::make_error_code(std::errc{errno});
@@ -25,6 +30,287 @@ auto SyscallWrapper(Scall scall, Args... args)
     }
     return ret;
 }
+
+/**
+ * @brief get the string of Type Name
+ */
+template <typename T>
+auto GetTypeName()
+    -> std::string_view
+{
+    static auto s_TypeName = std::string_view{abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr)};
+    return s_TypeName;
+}
+
+
+template <typename From, typename To>
+class LexicalCast {
+public:
+    auto operator()(const From& v)
+        -> To
+    {
+        return boost::lexical_cast<To>(v);
+    }
+};
+
+/**
+ * @brief convert YAML string to std::vector<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::vector<T>> {
+
+    auto operator()(const std::string& yaml_str)
+        -> std::vector<T>
+    {
+        auto nodes = YAML::Load(yaml_str);
+        auto vec = std::vector<T>{};
+
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&vec](const auto& node)
+                        -> void {
+                        auto sstream = std::stringstream{};
+                        sstream << node;
+                        vec.push_back(LexicalCast<std::string, T>(sstream.str()));
+                      });
+        return vec;
+    }
+};
+
+template <typename T>
+class LexicalCast<std::vector<T>, std::string> {
+public:
+    auto operator()(const std::vector<T>& v)
+        -> std::string
+    {
+        auto node = YAML::Node{YAML::NodeType::Sequence};
+        std::for_each(v.begin(),
+                      v.end(),
+                      [&node](const auto& elem)
+                        -> void {
+                            node.push_back(YAML::Load(LexicalCast<T, std::string>(elem)));
+                    });
+        return ( std::stringstream{} << node ).str();
+    }
+};
+
+/**
+ * @brief convert YAML String to std::list<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::list<T>> {
+public:
+    auto operator()(const std::string& yaml_str)
+        -> std::list<T>
+    {
+        auto list = std::list<T> {};
+        auto nodes = YAML::Load(yaml_str);
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&list](const auto& node)
+                        -> void {
+                            auto sstream = std::stringstream{};
+                            sstream << node;
+                            list.push_back(LexicalCast<std::string, T>(sstream.str()));
+                      });
+        return list;
+    }
+};
+
+/**
+ * @brief convert std::list<T> to YAML String
+ */
+template <typename T>
+class LexicalCast<std::list<T>, std::string> {
+public:
+    auto operator()(const std::list<T> list)
+        -> std::string
+    {
+        auto nodes = YAML::Node{YAML::NodeType::Sequence};
+        std::for_each(list.begin(),
+                      list.end(),
+                      [&nodes](const auto& elem)
+                        -> void {
+                            nodes.push_back(YAML::Load(LexicalCast<T, std::string>(elem)));
+                      });
+        return (std::stringstream() << nodes).str();
+    }
+};
+
+/**
+ * @brief convert std::set<T> to YAML String
+ */
+template <typename T>
+class LexicalCast<std::set<T>, std::string> {
+    auto operator()(const std::set<T> set)
+        -> std::string
+    {
+        auto nodes = YAML::Node{YAML::NodeType::Sequence};
+        std::for_each(set.begin(),
+                      set.end(),
+                      [&nodes](const auto& elem)
+                          -> void{
+                            nodes.push_back(YAML::Load(LexicalCast<T, std::string>(elem)));
+                      });
+        return (std::stringstream{} << nodes).str();
+    }
+};
+
+/**
+ * @brief convert String to std::list<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::set<T>> {
+public:
+    auto operator()(const std::string& yaml_str)
+        -> std::string
+    {
+        auto nodes = YAML::Load(yaml_str);
+        auto set = std::set<T>{};
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&set](const auto& node)
+                        -> void {
+                            auto sstream = std::stringstream{};
+                            sstream << node;
+                            set.push_back(LexicalCast<std::string, T>(sstream.str()));
+                      });
+        return set;
+    }
+};
+
+/**
+ * @brief convert std::set<T> to YAML String
+ */
+template <typename T>
+class LexicalCast<std::unordered_set<T>, std::string> {
+    auto operator()(const std::unordered_set<T> set)
+        -> std::string
+    {
+        auto nodes = YAML::Node{YAML::NodeType::Sequence};
+        
+        std::for_each(set.begin(),
+                      set.end(),
+                      [&nodes](const auto& elem)
+                          -> void{
+                            nodes.push_back(YAML::Load(LexicalCast<T, std::string>(elem)));
+                      });
+        return (std::stringstream{} << nodes).str();
+    }
+};
+
+/**
+ * @brief convert String to std::list<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::unordered_set<T>> {
+public:
+    auto operator()(const std::string& yaml_str)
+        -> std::string
+    {
+        auto nodes = YAML::Load(yaml_str);
+        auto set = std::unordered_set<T>{};
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&set](const auto& node)
+                        -> void {
+                            auto sstream = std::stringstream{};
+                            sstream << node;
+                            set.insert(LexicalCast<std::string, T>(sstream.str()));
+                      });
+        return set;
+    }
+};
+
+/**
+ * @brief convert std::set<T> to YAML String
+ */
+template <typename T>
+class LexicalCast<std::map<std::string, T>, std::string> {
+    auto operator()(const std::map<std::string, T> map)
+        -> std::string
+    {
+        auto nodes = YAML::Node{YAML::NodeType::Map};
+        std::for_each(map.begin(),
+                      map.end(),
+                      [&nodes](const auto& elem)
+                          -> void{
+                            const auto &[key, value] = elem;
+                            nodes[key] = YAML::Load(LexicalCast<T, std::string>(value));
+                      });
+        return (std::stringstream{} << nodes).str();
+    }
+};
+
+/**
+ * @brief convert String to std::list<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::map<std::string, T>> {
+public:
+    auto operator()(const std::string& yaml_str)
+        -> std::string
+    {
+        auto nodes = YAML::Load(yaml_str);
+        auto map = std::map<std::string ,T>{};
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&map](const auto& node)
+                        -> void {
+                            auto sstream = std::stringstream{};
+                            sstream << node->second;
+                            map.insert(std::make_pair(node->first.Scalar(),
+                                                      LexicalCast<std::string, T>(sstream.str())));
+                      });
+        return map;
+    }
+};
+
+/**
+ * @brief convert std::set<T> to YAML String
+ */
+template <typename T>
+class LexicalCast<std::unordered_map<std::string, T>, std::string> {
+    auto operator()(const std::unordered_map<std::string, T> umap)
+        -> std::string
+    {
+        auto nodes = YAML::Node{YAML::NodeType::Map};
+        
+        std::for_each(umap.begin(),
+                      umap.end(),
+                      [&nodes](const auto& elem)
+                          -> void{
+                            const auto& [key, value] = elem;
+
+                            nodes[key] = YAML::Load(LexicalCast<T, std::string>(value));
+                      });
+        return (std::stringstream{} << nodes).str();
+    }
+};
+
+/**
+ * @brief convert String to std::list<T>
+ */
+template <typename T>
+class LexicalCast<std::string, std::unordered_map<std::string, T>> {
+public:
+    auto operator()(const std::string& yaml_str)
+        -> std::unordered_map<std::string, T>
+    {
+        auto nodes = YAML::Load(yaml_str);
+        auto umap = std::unordered_map<std::string, T>{};
+        std::for_each(nodes.begin(),
+                      nodes.end(),
+                      [&umap](const auto& node)
+                          -> void {
+                          auto sstream = std::stringstream {};
+                          sstream << node->second;
+                            umap.insert(std::make_pair( node->first.Scalar(), LexicalCast<std::string, T>(sstream.str())));
+                      });
+        return umap;
+    }
+};
+
 
 
 

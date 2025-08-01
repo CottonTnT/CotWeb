@@ -61,6 +61,18 @@ constexpr auto cHashString(std::string_view str, Hash_t base = c_HashBase, Hash_
     // return not str.empty() ? ((str[0] -'\0') ^ cHashString(str.substr(1))) * prime: base;
 }
 
+/**
+ * @brief trasparent hash to gain performance in STL
+ */
+class Hasher {
+public:
+    using is_transparent = void;
+    auto operator()(std::string_view sv) const
+         -> size_t
+    {
+        return std::hash<std::string_view>{}(sv);
+    }
+};
 
 } //namespace UtilT
 #endif

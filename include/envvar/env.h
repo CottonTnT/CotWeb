@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mutex.h"
+#include "singleton.hpp"
 
 #include <string>
 #include <string_view>
@@ -42,8 +43,11 @@ public:
     auto GetOr(std::string_view key,std::string_view default_value = "")
         -> std::string;
 
+    auto GetCwd() const&
+        -> std::string_view;
 
-
+    auto GetCwd() &&
+        -> std::string;
 private:
     Cot::RWMutex mtx_;
     std::unordered_map<std::string, std::string> env_vars_;
@@ -51,5 +55,7 @@ private:
     std::string_view program_name_;
     std::string_view cwd_;
 }; 
+
+using EnvMgr = Cot::Singleton<Env>;
 
 }//namespace EnvT
