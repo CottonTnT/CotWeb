@@ -20,23 +20,42 @@ if is_mode("release") then
     set_optimize("fastest")
 end
 
+target("common-lib")
+    set_kind("static")
+    set_targetdir("lib")
+    add_includedirs("include")
+    add_files("srcs/common/*.cpp")
 
--- 添加测试目标
+target("logger")
+    set_kind("static")
+    set_targetdir("lib")
+    add_deps("common-lib")
+    add_includedirs("include")
+    add_includedirs("/usr/local/include")
+    add_files("srcs/logger/*.cpp")
+    remove_files("logappenderdefine.h", "logdefine.h")
+
 target("testlogger")
     set_kind("binary")
+    add_deps("logger", "common-lib")
     add_files("test/testlogger.cpp")
-    add_files("srcs/logger/*.cpp")
-    add_files("srcs/util.cpp")
     add_includedirs("include")
     add_includedirs("/usr/local/include")
     add_syslinks("pthread")
 
--- target("testlogformatter")
---     set_kind("binary")
---     add_deps("logger") -- 依赖sylarweb库
---     add_files("srcs/logger/testlogger.cpp")
---     add_includedirs("include")
---     add_includedirs("/usr/local/include")
+target("testyaml")
+    set_kind("binary")
+    add_files("test/testyaml.cpp")
+    add_includedirs("/usr/local/include")
+    add_syslinks("yaml-cpp")
+
+target("testenv")
+    set_kind("binary")
+    add_files("test/testenv.cpp")
+    -- add_files("srcs/util.cpp")
+    add_includedirs("include")
+    add_includedirs("/usr/local/include")
+    -- add_syslinks("pthread")
 
 
 target("fun")

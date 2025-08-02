@@ -1,8 +1,6 @@
 
-#include "common.h"
+#include "common/alias.h"
 #include "logformatter.h"
-#include "loggerconcept.hpp"
-
 namespace LogT{
 
 // class FormatPattern;

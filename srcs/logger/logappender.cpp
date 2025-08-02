@@ -1,4 +1,3 @@
-
 #include "logger/logappender.h"
 namespace LogT{
 
@@ -35,7 +34,7 @@ auto FileAppender::Reopen()
     }
     filestream_.open(filename_);
 
-    return not not filestream_;
+    return  !! filestream_;
 }
 
 } //namespace LogT

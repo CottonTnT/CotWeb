@@ -3,12 +3,10 @@
 
 #include <list>
 
-#include "mutex.h"
-#include "common.h"
+#include "common/mutex.h"
+#include "common/alias.h"
 #include "logevent.h"
 #include "loglevel.h"
-#include "noncopyable.h"
-#include "util.h"
 
 
 /**
@@ -17,7 +15,7 @@
 #define COT_LOG_LEVEL(logger, level) \
     if (true)                      \
         LogT::LogGuard(logger,      \
-                      Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", UtilT::GetFiberId(), time(0)))         \
+                      Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", 0, time(0)))         \
     ).GetLogEvent()->GetSS()
 
 #define COT_LOG_DEBUG(logger) COT_LOG_LEVEL(logger, LogT::Level::DEBUG)
@@ -68,8 +66,7 @@ class AppenderProxyBase;
  * 日志事件由 log 方法输出，log 方法首先判断日志级别是否达到本 Logger 的级别要求，
  * 是则将日志传给各个 LogAppender 进行输出，否则抛弃这条日志。
  */
-class Logger : public std::enable_shared_from_this<Logger>
-    , public Cot::NonCopyOrMoveable {
+class Logger : public std::enable_shared_from_this<Logger>{
 public:
     using MutexType = Cot::SpinMutex;
 

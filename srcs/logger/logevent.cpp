@@ -1,7 +1,6 @@
 #include "logger/logevent.h"
 #include "logger/logger.h"
 #include "logger/loglevel.h"
-#include "util.h"
 #include <memory>
 
 namespace LogT {

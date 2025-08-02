@@ -1,11 +1,26 @@
 #pragma once
 #include "patternitembase.h"
-#include "loggerconcept.hpp"
 #include <iostream>
 #include <print>
 
 namespace LogT {
 
+
+template <typename T>
+concept IsNormalPatternItem = requires(T x, std::ostream y, Sptr<Event> z)
+{
+    x.Format(y, z);
+};
+
+template <typename T>
+concept IsStatusPatternItem = requires(T x, std::ostream y, Sptr<Event> z)
+{
+    x.Format(y, z);
+    x.GetSubpattern();
+};
+
+template <typename T>
+concept IsPatternItem = IsNormalPatternItem<T> or IsStatusPatternItem<T>;
 
 
 template <typename ItemImpl>
@@ -19,36 +34,10 @@ public:
     {
     }
 
-    auto SetItem(std::string item)
-        ->void { item_ = std::move(item); }
-
     auto Format(std::ostream& os, Sptr<Event> event)
         -> void override
     {
         item_.Format(os, event);
-    }
-
-    // auto Show()
-    //     -> void override
-    // {
-    //     if constexpr (IsStatusPatternItem<ItemImpl>)
-    //         std::print("{}:{}-", item_, item_.GetSubpattern());
-    //     else 
-    //         std::print("{}-", item_);
-    // }
-
-    // todo:finish clone
-    auto Clone(const PatternItemProxyBase& rhs)
-        -> PatternItemProxy& override
-    {
-        auto* under_type = dynamic_cast<const PatternItemProxy*>(&rhs);
-        if(under_type != nullptr)
-        {
-            *this = static_cast<PatternItemProxy>(*under_type);
-            return *this;
-        }
-        // todo:exception
-        return *this;
     }
 
 private:

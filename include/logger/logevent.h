@@ -1,6 +1,6 @@
 #ifndef COT_LOGEVENT_H
 #define COT_LOGEVENT_H
-#include "common.h"
+#include "common/alias.h"
 #include "loglevel.h"
 #include <cstdarg>
 #include <sstream>

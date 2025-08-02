@@ -2,10 +2,10 @@
 #include "logger/logevent.h"
 #include "logger/logformatter.h"
 
+#include <algorithm>
 #include <cassert>
 #include <unordered_map>
 #include <functional>
-
 namespace {
 
 enum class ParseState {
@@ -33,15 +33,15 @@ auto RegisterFormatStatusItem()
 
 void LogFormatter::StartParse_()
 {
-    static auto s_ProduceFuncMap1 = []() -> std::unordered_map<std::string, ItemProduceFunc>{
+    static auto s_ProduceFuncMap1 = []()
+        -> std::unordered_map<std::string, ItemProduceFunc>{
         return RegisterFormatItem();
     }();
 
-    static auto s_ProduceFuncMap2 = []() -> std::unordered_map<std::string, StatusItemProduceFunc> {
+    static auto s_ProduceFuncMap2 = []()
+        -> std::unordered_map<std::string, StatusItemProduceFunc> {
         return RegisterFormatStatusItem();
     }();
-
-
 
     assert(s_ProduceFuncMap1.size() != 0);
     auto normal_str = std::string {}; // to store the normal str
@@ -124,30 +124,23 @@ auto LogFormatter::Format(std::ostream& os, Sptr<Event> event)
 {
     std::cout << pattern_items_.size() << std::endl;
 
-    for (auto i : pattern_items_)
-    {
-         i->Format(os, event);
-    }
+    std::ranges::for_each(pattern_items_,
+                          [&os, event ](const Sptr<PatternItemProxyBase> item)
+                             -> void {
+                            item->Format(os, event);
+                          });
 }
 
 auto LogFormatter::Format(Sptr<Event> event)
     -> std::string
 {
     auto ss = std::stringstream{};
-    for (auto& i : pattern_items_)
-    {
-        i->Format(ss, event);
-    }
+    std::ranges::for_each(pattern_items_,
+                          [&ss, event ](const  Sptr<PatternItemProxyBase> item)
+                             -> void {
+                            item->Format(ss, event);
+                          });
     return ss.str();
 }
-
-// auto LogFormatter::Show()
-//     -> void
-// {
-//     for (auto& i : pattern_items_)
-//     {
-//         i->Show();
-//     }
-// }
 
 } // namespace LogT

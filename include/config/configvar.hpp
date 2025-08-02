@@ -1,8 +1,8 @@
 #pragma once
 
+#include "common/mutex.h"
 #include "config/configvarbase.h"
-#include "mutex.h"
-#include "util.hpp"
+#include "configutil.h"
 
 namespace ConfigT{
 template <typename T, typename FromStr = UtilT::LexicalCast<std::string, T>, typename ToStr = UtilT::LexicalCast<T, std::string>>

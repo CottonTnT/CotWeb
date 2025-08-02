@@ -2,10 +2,10 @@
 #ifndef LOGAPPENDER_H
 #define LOGAPPENDER_H
 
-#include "common.h"
+#include "common/alias.h"
 #include "appenderbase.h"
 #include "logformatter.h"
-#include "mutex.h"
+#include "common/mutex.h"
 #include <memory>
 
 
@@ -14,6 +14,10 @@ namespace LogT {
 class LogFormatter;
 class Event;
 
+template <typename T>
+concept IsAppenderImpl = requires(T x, Sptr<LogFormatter> y, Sptr<Event> z) {
+    x.Log(y, z);
+};
 
 /**
  * @brief thread-safe, actually a proxy of the concrete appender

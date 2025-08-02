@@ -7,7 +7,6 @@ namespace LogT {
 
 class PatternItemProxyBase {
 
-
 protected:
     PatternItemProxyBase& operator=(const PatternItemProxyBase&) = default;
     PatternItemProxyBase& operator=(PatternItemProxyBase&&)      = default;
@@ -16,14 +15,9 @@ public:
     PatternItemProxyBase() = default;
     PatternItemProxyBase(const PatternItemProxyBase&)            = default;
     PatternItemProxyBase(PatternItemProxyBase&&)                 = default;
-    // virtual auto Show()
-    //     -> void = 0;
 
     virtual auto Format(std::ostream& os, Sptr<Event> event)
         -> void = 0;
-
-    virtual auto Clone(const PatternItemProxyBase& rhs)
-        -> PatternItemProxyBase& = 0;
 
     virtual ~PatternItemProxyBase() = default;
 };

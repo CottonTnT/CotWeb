@@ -1,11 +1,11 @@
 #include "logger/logutil.h"
+#include "common/util.h"
 #include "logger/loglevel.h"
-#include "util.h"
 
 namespace LogT {
 
 auto LevelToString(Level level)
-    -> std::optional<std::string_view>
+    -> std::string_view
 {
 
     switch (level)
@@ -15,19 +15,12 @@ auto LevelToString(Level level)
     case (levelvalue):{\
         return #levelname;\
     }
-
-        IFCODE(Level::FATAL, FATAL);
-        IFCODE(Level::ALERT, ALERT);
-        IFCODE(Level::CRIT, CRIT);
         IFCODE(Level::ERROR, ERROR);
         IFCODE(Level::WARN, WARN);
-        IFCODE(Level::NOTICE, NOTICE);
         IFCODE(Level::INFO, INFO);
         IFCODE(Level::DEBUG, DEBUG);
-        IFCODE(Level::NOTSET, NOTSET);
+        IFCODE(Level::ALL, ALL);
 #undef IFCODE
-        default:
-            return std::nullopt;
     }
 }
 
@@ -35,7 +28,7 @@ auto LevelToString(Level level)
  * @todo: should check the hash collision
  */
 auto StringToLevel(std::string_view str)
-    -> std::optional<Level>
+    -> Level
 {
     switch (UtilT::cHashString(str))
     {
@@ -44,25 +37,17 @@ auto StringToLevel(std::string_view str)
         return levelvalue;\
     }\
 
-    IFCODE(FATAL, Level::FATAL);
-    IFCODE(fatal, Level::FATAL);
-    IFCODE(ALERT, Level::ALERT);
-    IFCODE(alert, Level::ALERT);
-    IFCODE(CRIT, Level::CRIT);
-    IFCODE(crit, Level::CRIT);
     IFCODE(ERROR, Level::ERROR);
     IFCODE(error, Level::ERROR);
     IFCODE(WARN, Level::WARN);
     IFCODE(warn, Level::WARN);
-    IFCODE(NOTICE, Level::NOTICE);
-    IFCODE(notice, Level::NOTICE);
     IFCODE(INFO, Level::INFO);
     IFCODE(info, Level::INFO);
     IFCODE(DEBUG, Level::DEBUG);
     IFCODE(debug, Level::DEBUG);
 #undef IFCODE
     default:
-           return std::nullopt;
+           return Level::ALL;
     }
 }
 

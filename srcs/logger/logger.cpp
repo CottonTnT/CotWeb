@@ -1,9 +1,9 @@
 #include "logger/logger.h"
+#include "common/util.h"
 #include "logger/logappender.h"
 #include "logger/logevent.h"
-#include "logger/loglevel.h"
-#include "util.h"
 
+#include <algorithm>
 #include <unordered_map>
 
 namespace LogT {
@@ -45,10 +45,10 @@ void Logger::Log(Sptr<Event> event)
 {
     if (event->GetLevel() < level_)
         return;
-    for (auto& i : appenders_)
-    {
-        i->Log(event);
-    }
-    
+    std::ranges::for_each(appenders_,
+                          [event](Sptr<AppenderProxyBase> appender)
+                            -> void{
+                                appender->Log(event);
+                          });
 }
 } //namespace LogT

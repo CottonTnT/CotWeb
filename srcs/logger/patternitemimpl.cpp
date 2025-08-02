@@ -28,7 +28,7 @@ public:
     static void Format(std::ostream& os,
                        Sptr<Event> event)
     {
-        os << *LevelToString(event->GetLevel());
+        os << LevelToString(event->GetLevel());
     }
 
 };

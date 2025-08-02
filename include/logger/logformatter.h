@@ -1,5 +1,5 @@
 #pragma once
-#include "common.h"
+#include "common/alias.h"
 #include "patternitembase.h"
 
 #include <list>
@@ -34,7 +34,6 @@ class LogFormatter {
 public:
     explicit LogFormatter(std::string  pattern = "%d{%Y-%m-%d %H:%M:%S} [%rms]%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n")
         : pattern_(std::move(pattern))
-        , error_(false)
     {
         StartParse_();
     }
@@ -45,13 +44,12 @@ public:
     auto Format(std::ostream& os, Sptr<Event> event)
         -> void;
 
-    // auto Show()
-    //     -> void;
 private:
     void StartParse_();
+
     std::string pattern_;
     std::list<Sptr<PatternItemProxyBase>> pattern_items_;
-    bool error_;
+    bool error_ = false;
 }; // class FormatPattern
 
 } // namespace LogT

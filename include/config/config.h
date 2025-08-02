@@ -1,9 +1,9 @@
 #pragma once
 
-#include "common.h"
+#include "common/alias.h"
 #include "configvar.hpp"
 #include "configvarbase.h"
-#include "mutex.h"
+#include "common/mutex.h"
 #include <memory>
 #include <stdexcept>
 
