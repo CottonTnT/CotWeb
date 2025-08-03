@@ -21,14 +21,14 @@ auto ListAllFile(std::vector<std::string>& files, const std::string& path, const
 
     if (not sucess_or)
     {
-        COT_LOG_INFO(s_SysLogger) << sucess_or.error();
+        LOG_INFO(s_SysLogger) << sucess_or.error();
         return;
     }
     auto dir_or = UtilT::SyscallWrapper<nullptr>(opendir, path.c_str());
 
     if (not dir_or)
     {
-        COT_LOG_INFO(s_SysLogger) << dir_or.error();
+        LOG_INFO(s_SysLogger) << dir_or.error();
         return;
     }
 

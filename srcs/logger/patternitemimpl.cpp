@@ -170,7 +170,6 @@ public:
         localtime_r(&time, &tm);
 
         auto  buf = std::array<char, 64>{};
-         
         std::ignore = strftime(buf.data(), buf.size(), date_format_.c_str(), &tm);
 
         os << buf.data();

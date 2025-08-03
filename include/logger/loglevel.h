@@ -5,15 +5,15 @@ namespace LogT{
 
 enum class Level {
     /// 错误
-    ERROR = 300,
+    ERROR = 700,
     /// 警告
-    WARN = 400,
+    WARN = 600,
     /// 一般信息
-    INFO = 600,
+    INFO = 500,
     /// 调试信息
-    DEBUG = 700,
+    DEBUG = 400,
     /// 未设置
-    ALL = 800
+    ALL = 300
 };
 
 inline auto operator>=(Level one, Level two)

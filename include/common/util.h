@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <functional>
 #include <string_view>
+#include <sstream>
+#include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -25,6 +27,12 @@ auto GetFiberId()
 auto GetThreadName()
     -> std::string;
 
+void Backtrace(std::vector<std::string>& bt,
+               std::uint32_t size,
+               std::uint32_t skip);
+
+auto BacktraceToString(std::uint32_t size, std::uint32_t skip, const std::string& prefix)
+    -> std::string;
 
 struct CallGuard
 {

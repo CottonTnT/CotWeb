@@ -52,7 +52,7 @@ Thread::Thread(std::function<void()> cb, std::string name)
     auto ret = UtilT::SyscallWrapper<EAGAIN, EINVAL, EPERM>(pthread_create, &thread_,nullptr, &Thread::Run, this);
     if (not ret.has_value())
     {
-        COT_LOG_ERROR(g_Logger) << "pthread_create thread fail:" << ret.error()  << name_;
+        LOG_ERROR(g_Logger) << "pthread_create thread fail:" << ret.error()  << name_;
         throw std::logic_error("pthread_create error");
     }
     latch_.Wait();
@@ -74,7 +74,7 @@ auto Thread::Join()
         auto ret = UtilT::SyscallWrapper<EDEADLOCK, EINVAL, ESRCH>(pthread_join, thread_, nullptr);
         if (not ret)
         {
-            COT_LOG_ERROR(g_Logger) << "pthread_join thread fail:" << ret.error()  << name_;
+            LOG_ERROR(g_Logger) << "pthread_join thread fail:" << ret.error()  << name_;
             throw std::logic_error("pthread_join error");
         }
         thread_ = 0;

@@ -122,8 +122,6 @@ void LogFormatter::StartParse_()
 auto LogFormatter::Format(std::ostream& os, Sptr<Event> event)
     -> void
 {
-    std::cout << pattern_items_.size() << std::endl;
-
     std::ranges::for_each(pattern_items_,
                           [&os, event ](const Sptr<PatternItemProxyBase> item)
                              -> void {

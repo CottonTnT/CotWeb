@@ -9,5 +9,4 @@ namespace LogT{
 
     auto StringToLogLevel(std::string_view str)
         ->  Level;
-
 } //namespace LogT

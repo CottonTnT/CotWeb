@@ -6,7 +6,6 @@ namespace LogT{
 void StdoutAppender::Log(Sptr<LogFormatter> fmter, Sptr<Event> event)
 {
     fmter->Format(std::cout,  event);
-    std::cout << event->GetContent();
 }
 
 
@@ -22,7 +21,6 @@ FileAppender::FileAppender(std::string_view filename)
 void FileAppender::Log(Sptr<LogFormatter> fmter, Sptr<Event> event)
 {
     filestream_ << fmter->Format(event);
-    filestream_ << event->GetContent();
 }
 
 auto FileAppender::Reopen()

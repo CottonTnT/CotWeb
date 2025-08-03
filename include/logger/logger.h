@@ -12,46 +12,37 @@
 /**
  * @brief 巧妙利用了宏，既做到了作用域的效果，也能继续 如 `COT_LOG_LEVEL(logger, level) << xxx`一样的输出
  */   
-#define COT_LOG_LEVEL(logger, level) \
+#define LOG_LEVEL(logger, level) \
     if (true)                      \
-        LogT::LogGuard(logger,      \
+        LogT::LogGuard{logger,      \
                       Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", 0, time(0)))         \
-    ).GetLogEvent()->GetSS()
+    }.GetLogEvent()->GetSS()
 
-#define COT_LOG_DEBUG(logger) COT_LOG_LEVEL(logger, LogT::Level::DEBUG)
-#define COT_LOG_INFO(logger)  COT_LOG_LEVEL(logger, LogT::Level::INFO)
-#define COT_LOG_WARN(logger)  COT_LOG_LEVEL(logger, LogT::Level::WARN)
-#define COT_LOG_ERROR(logger) COT_LOG_LEVEL(logger, LogT::Level::ERROR)
-#define COT_LOG_FATAL(logger) COT_LOG_LEVEL(logger, LogT::Level::FATAL)
-#define COT_LOG_ALERT(logger) COT_LOG_LEVEL(logger, LogT::Level::ALERT)
+#define LOG_DEBUG(logger) LOG_LEVEL(logger, LogT::Level::DEBUG)
+#define LOG_INFO(logger)  LOG_LEVEL(logger, LogT::Level::INFO)
+#define LOG_WARN(logger)  LOG_LEVEL(logger, LogT::Level::WARN)
+#define LOG_ERROR(logger) LOG_LEVEL(logger, LogT::Level::ERROR)
 
 // /**
 //  * @brief 使用C printf方式将日志级别level的日志写入到logger
 //  * @details 构造一个LogEventWrap对象，包裹包含日志器和日志事件，在对象析构时调用日志器写日志事件
 //  * @todo 协程id未实现，暂时写0
 //  */
-#define COT_LOG_FMT_LEVEL(logger, level, fmt, ...) \
+#define LOG_FMT_LEVEL(logger, level, fmt, ...) \
     if (true)                                      \
         LogT::LogGuard(logger,                     \
                       Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(), "tname_placeholder", UtilT::GetFiberId(), time(0)))   \
         ).GetLogEvent()->Printf(fmt, __VA_ARGS__)\
 
 
-#define COT_LOG_FMT_FATAL(logger, fmt, ...)  COT_LOG_FMT_LEVEL(logger, LogT::Level::FATAL, fmt, __VA_ARGS__)
+#define LOG_FMT_ERROR(logger, fmt, ...)  LOG_FMT_LEVEL(logger, LogT::Level::ERROR, fmt, __VA_ARGS__)
 
-#define COT_LOG_FMT_ALERT(logger, fmt, ...)  COT_LOG_FMT_LEVEL(logger, LogT::Level::ALERT, fmt, __VA_ARGS__)
+#define LOG_FMT_WARN(logger, fmt, ...)   LOG_FMT_LEVEL(logger, LogT::Level::WARN, fmt, __VA_ARGS__)
 
-#define COT_LOG_FMT_CRIT(logger, fmt, ...)   COT_LOG_FMT_LEVEL(logger, LogT::Level::CRIT, fmt, __VA_ARGS__)
 
-#define COT_LOG_FMT_ERROR(logger, fmt, ...)  COT_LOG_FMT_LEVEL(logger, LogT::Level::ERROR, fmt, __VA_ARGS__)
+#define LOG_FMT_INFO(logger, fmt, ...)   LOG_FMT_LEVEL(logger, LogT::Level::INFO, fmt, __VA_ARGS__)
 
-#define COT_LOG_FMT_WARN(logger, fmt, ...)   COT_LOG_FMT_LEVEL(logger, LogT::Level::WARN, fmt, __VA_ARGS__)
-
-#define COT_LOG_FMT_NOTICE(logger, fmt, ...) COT_LOG_FMT_LEVEL(logger, LogT::Level::NOTICE, fmt, __VA_ARGS__)
-
-#define COT_LOG_FMT_INFO(logger, fmt, ...)   COT_LOG_FMT_LEVEL(logger, LogT::Level::INFO, fmt, __VA_ARGS__)
-
-#define COT_LOG_FMT_DEBUG(logger, fmt, ...)  COT_LOG_FMT_LEVEL(logger, LogT::Level::DEBUG, fmt, __VA_ARGS__)
+#define LOG_FMT_DEBUG(logger, fmt, ...)  LOG_FMT_LEVEL(logger, LogT::Level::DEBUG, fmt, __VA_ARGS__)
 
 namespace LogT {
 
