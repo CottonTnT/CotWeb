@@ -8,24 +8,25 @@
 
 #include "common/alias.h"
 #include "fiber/fiberstate.h"
+// #include "fiber/scheduler.h"
 
 
 namespace FiberT{
 
 class Fiber : public std::enable_shared_from_this<Fiber>{
-
+friend class Scheduler;
 private:
     /**
-     * @brief the main fiber of thread, for construct of the first Fiber of every thread, i.e, main fiber
+     * @brief No Args constructor
+     * @attention  only for construct of the first Fiber of every thread, i.e, main fiber
      */
     Fiber();
 
     /**
-     * @brief for construct the sub fiber of thread
+     * @brief for construct the sub fiber of thread, and we never care about the state of main fiber ,cause we never user it for now
      */
     Fiber(std::function<void()> cb,
-          std::uint32_t stk_size = 0,
-          bool use_caller = false);
+          std::uint32_t stk_size = 0);
     
     template <typename... Args>
     static auto CreateFiber_(Args&&... args)
@@ -33,11 +34,6 @@ private:
     {
         return std::shared_ptr<Fiber>(new Fiber{std::forward<Args>(args)...});
     }
-
-    /**
-     * @brief 将当前协程切换到后台，唤醒主协程, 不改变当前协程的状态
-     */
-    void BackToMain_(FiberState next_state);
 
     auto IsMainFiber_() const
         -> bool;
@@ -71,20 +67,6 @@ public:
      */
     void Resume();
 
-
-    /**
-     * @brief 将当前线程切换到执行状态
-     * @pre 执行的为当前线程的主协程
-     */
-    void Call();
-
-    /**
-     * @brief 将当前线程切换到后台
-     * @pre 执行的为该协程
-     * @post 返回到线程的主协程
-     */
-    void Back();
-
     /**
      * @brief 返回协程id
      */
@@ -100,12 +82,37 @@ public:
     auto SetState(FiberState new_state)
         -> void { state_ = new_state; }
 
+
+    /**
+     * @brief 是否已中止(正常结束或异常）
+     */
+    auto IsTerminated()
+        -> bool
+    {
+        return state_ == FiberState::TERM;
+    }
+
+    /**
+     * @brief 是否就绪
+     */
+    auto IsReady()
+        -> bool
+    {
+        return state_ == FiberState::READY;
+    }
+
+    /**
+     * @brief 将当前协程切换到后台,并设置为READY状态
+     * @post getState() = READY
+     */
+    void Yield();
+
+
     static auto CreateMainFiber()
         -> void;
 
     static auto CreateSubFiber(std::function<void()> cb,
-                               std::uint32_t stk_size = 0,
-                               bool use_caller = false)
+                               std::uint32_t stk_size = 0)
         -> std::shared_ptr<Fiber>;
 
     /**
@@ -115,7 +122,11 @@ public:
         -> void;
 
     /**
-     * @brief if there is no running fiber, then create the main fiber
+     * @brief 返回当前线程正在执行的协程
+     * @details 如果当前线程还未创建协程，则创建线程的第一个协程，
+     * 且该协程为当前线程的主协程，其他协程都通过这个协程来调度，也就是说，其他协程
+     * 结束时,都要切回到主协程，由主协程重新选择新的协程进行resume
+     * @attention 线程如果要创建协程，那么应该首先执行一下Fiber::GetThis()操作，以初始化主函数协程
      */
     static auto GetCurThrRunningFiber()
         -> Sptr<Fiber>;
@@ -124,23 +135,12 @@ public:
         -> uint64_t;
 
 
-    /**
-     * @brief 将当前协程切换到后台,并设置为READY状态
-     * @post getState() = READY
-     */
-    static void YieldToReady();
 
-    /**
-     * @brief 将当前协程切换到后台,并设置为Hold状态
-     * @post getState() = HOLD
-     */
-
-    static void YieldToHold();
 
     /**
      * @brief 返回当前协程的总数量
      */
-    static auto TotalFibers()
+    static auto GetTotalFibers()
         -> uint64_t;
 
 
@@ -154,15 +154,17 @@ public:
      * @brief 协程执行函数
      * @post 执行完成返回到线程调度协程
      */
-    static void CallerMainFunc();
+    static void FiberMainFunc();
 
     static inline constexpr auto c_DefaultStkSize = std::uint32_t{8096};
 private:
-    uint64_t id_ = 0;
+    uint64_t id_;
     uint32_t stk_size_ = 0;
-    FiberState state_ = FiberState::INIT;
-    ucontext_t ctx_;
-    std::unique_ptr<void, void(*)(void*)> stk_;
-    std::function<void()> cb_;
+    FiberState state_;
+    ucontext_t ctx_; //协程上下文
+
+    std::unique_ptr<void, void(*)(void*)> stk_; //协程栈地址
+
+    std::function<void()> cb_; //协程
 };
 } //namespace FiberT

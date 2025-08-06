@@ -24,12 +24,17 @@ public:
 
     auto Join()
         -> void;
+
+    auto GetId() const
+        -> pid_t { return id_;}
+    auto GetName() const
+        -> std::string_view{ return name_;}
     static  auto Run(void* arg)
         -> void*;
 
     static auto GetThis()
         -> Thread*;
-    static auto GetName()
+    static auto GetCurThrName()
         -> std::string_view;
     
     static auto SetName(std::string name)

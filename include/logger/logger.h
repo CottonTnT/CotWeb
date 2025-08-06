@@ -15,7 +15,7 @@
 #define LOG_LEVEL(logger, level) \
     if (true)                      \
         LogT::LogGuard{logger,      \
-                      Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", 0, time(0)))         \
+                      Sptr<LogT::Event>(new LogT::Event(logger->GetName(), level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", 0, time(0)))         \
     }.GetLogEvent()->GetSS()
 
 #define LOG_DEBUG(logger) LOG_LEVEL(logger, LogT::Level::DEBUG)

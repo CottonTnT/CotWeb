@@ -10,12 +10,9 @@ auto FiberStateToString(FiberState st)
     case (value): \
         return #str\
 
-    IFCODE(FiberState::INIT, INIT);
-    IFCODE(FiberState::EXCEPT, EXCEPT);
-    IFCODE(FiberState::HOLD, HOLD);
+    IFCODE(FiberState::RUNNING, RUNNING);
     IFCODE(FiberState::READY, READY);
     IFCODE(FiberState::TERM, TERM);
-    IFCODE(FiberState::EXEC, EXEC);
 #undef IFCODE
     }
     

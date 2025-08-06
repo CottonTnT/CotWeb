@@ -55,9 +55,11 @@ target("testfiber")
     add_deps("logger", "common-lib")
     add_files("test/testfiber.cpp")
     add_files("srcs/fiber/*.cpp")
+    remove_files("srcs/fiber/scheduler.cpp")
     add_includedirs("include")
     add_includedirs("/usr/local/include")
     add_syslinks("pthread")
+    -- add_defines("NO_DEBUG") //开启调试日志
 
 
 target("testyaml")
