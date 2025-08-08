@@ -37,7 +37,7 @@ public:
     static auto GetCurThrName()
         -> std::string_view;
     
-    static auto SetName(std::string name)
+    static auto SetCurThrName(std::string name)
         -> void; 
 private:
     pid_t id_ = -1;

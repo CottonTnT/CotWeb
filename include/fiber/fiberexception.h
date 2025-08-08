@@ -3,31 +3,41 @@
 #include <stdexcept>
 namespace FiberT{
 
-class FiberLibInnerError : public std::logic_error {
+class LibInnerError : public std::logic_error {
 
 public:
-    FiberLibInnerError(std::string error_msg)
+    LibInnerError(std::string error_msg)
         : std::logic_error {"There is a vulnerability in this library:" + std::move(error_msg)}
     {
     }
 };
 
-class FiberInitError : public std::runtime_error {
+class InitError : public std::runtime_error {
 public:
-    FiberInitError(std::string error_msg)
+    InitError(std::string error_msg)
         : std::runtime_error {"Init the fiber failed:" + std::move(error_msg)}
     {
     }
 };
 
 
-class FiberSwapError : public std::runtime_error {
+class SwapError : public std::runtime_error {
 public:
-    FiberSwapError(std::string error_msg)
+    SwapError(std::string error_msg)
         : std::runtime_error {"swap the fiber failed:" + std::move(error_msg)}
     {
     }
 };
+
+class NullPointerError : public std::runtime_error {
+public:
+    NullPointerError(std::string error_msg)
+        : std::runtime_error {"the fiber is null:" + std::move(error_msg)}
+    {
+    }
+};
+
+
 
 
 

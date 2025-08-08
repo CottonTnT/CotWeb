@@ -27,11 +27,23 @@ auto GetFiberId()
 auto GetThreadName()
     -> std::string;
 
+/**
+ * @brief 获取当前的调用栈
+ * @param[out] bt 保存调用栈
+ * @param[in] size 最多返回层数
+ * @param[in] skip 跳过栈顶的层数
+ */
 void Backtrace(std::vector<std::string>& bt,
-               std::uint32_t size,
-               std::uint32_t skip);
+               std::uint32_t size = 64,
+               std::uint32_t skip = 1);
 
-auto BacktraceToString(std::uint32_t size, std::uint32_t skip, const std::string& prefix)
+/**
+ * @brief 获取当前栈信息的字符串
+ * @param[in] size 栈的最大层数
+ * @param[in] skip 跳过栈顶的层数
+ * @param[in] prefix 栈信息前输出的内容
+ */
+auto BacktraceToString(std::uint32_t size = 64, std::uint32_t skip = 2, const std::string& prefix = "")
     -> std::string;
 
 struct CallGuard

@@ -22,12 +22,12 @@ auto Thread::GetThis()
     return t_ThreadHandle;
 }
 
-auto Thread::GetName()
+auto Thread::GetCurThrName()
     -> std::string_view
 {
     return t_ThreadName;
 }
-auto Thread::SetName(std::string name)
+auto Thread::SetCurThrName(std::string name)
     -> void
 {
     if(name.empty()) return;
