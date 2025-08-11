@@ -1,6 +1,10 @@
 build/*
 bin/*
 lib/*
+test/*
+!test/testlogger.cpp
+!test/testfiber.cpp
+!test/scheduler.cpp
 .xmake/*
 .vscode/*
 .cache/*

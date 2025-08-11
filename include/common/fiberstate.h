@@ -1,7 +1,7 @@
 #pragma once
 
 enum class FiberState {
-    INIT, //初始化状态
+    UNUSED, //未使用状态，
     HOLD, //暂停状态
     RUNNING, //执行中状态
     TERM, //结束状态

@@ -5,8 +5,10 @@
 
 #include "common/mutex.h"
 #include "common/alias.h"
+#include "common/curthread.h"
 #include "logevent.h"
 #include "loglevel.h"
+#include <iostream>
 
 
 /**
@@ -15,7 +17,7 @@
 #define LOG_LEVEL(logger, level) \
     if (true)                      \
         LogT::LogGuard{logger,      \
-                      Sptr<LogT::Event>(new LogT::Event(logger->GetName(), level, __LINE__, __FILE__, 0, UtilT::GetThreadId(),"tname_placeholder", 0, time(0)))         \
+                      Sptr<LogT::Event>(new LogT::Event(logger->GetName(), level, __LINE__, __FILE__, 0, CurThr::GetId(), CurThr::GetName(), CurThr::GetRunningFiberId().value_or(0), time(0)))         \
     }.GetLogEvent()->GetSS()
 
 #define LOG_DEBUG(logger) LOG_LEVEL(logger, LogT::Level::DEBUG)
@@ -30,9 +32,9 @@
 //  */
 #define LOG_FMT_LEVEL(logger, level, fmt, ...) \
     if (true)                                      \
-        LogT::LogGuard(logger,                     \
-                      Sptr<LogT::Event>(new LogT::Event("nihao", level, __LINE__, __FILE__, 0, UtilT::GetThreadId(), "tname_placeholder", UtilT::GetFiberId(), time(0)))   \
-        ).GetLogEvent()->Printf(fmt, __VA_ARGS__)\
+        LogT::LogGuard{logger,                     \
+                      Sptr<LogT::Event>(new LogT::Event(logger->GetName(), level, __LINE__, __FILE__, 0, UtilT::GetThreadId(), CurThr::GetRunningFiberId().value_or(0), time(0)))   \
+        }.GetLogEvent()->Printf(fmt, __VA_ARGS__)\
 
 
 #define LOG_FMT_ERROR(logger, fmt, ...)  LOG_FMT_LEVEL(logger, LogT::Level::ERROR, fmt, __VA_ARGS__)

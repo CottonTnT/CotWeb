@@ -1,4 +1,4 @@
-#include "fiber/fiberutil.h"
+#include "common/fiberutil.h"
 
 namespace FiberT{
 auto FiberStateToString(FiberState st)
@@ -10,7 +10,7 @@ auto FiberStateToString(FiberState st)
     case (value): \
         return #str\
 
-    IFCODE(FiberState::INIT, INIT);
+    IFCODE(FiberState::UNUSED, UNUSED);
     IFCODE(FiberState::RUNNING, RUNNING);
     IFCODE(FiberState::READY, READY);
     IFCODE(FiberState::HOLD, HOLDj);

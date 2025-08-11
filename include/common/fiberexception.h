@@ -37,6 +37,13 @@ public:
     }
 };
 
+class WrongStateError : public std::logic_error {
+public:
+    WrongStateError(std::string error_msg)
+        : std::logic_error {"the state of fiber is wrong:" + std::move(error_msg)}
+    {
+    }
+};
 
 
 

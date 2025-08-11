@@ -1,19 +1,18 @@
 #include "common/allocator.h"
+#include "common/curthread.h"
 #include "common/util.h"
 #include "common/util.hpp"
-#include "fiber/fiberexception.h"
-#include "fiber/fiberstate.h"
-#include "fiber/scheduler.h"
+#include "common/fiberexception.h"
+#include "common/fiberstate.h"
 #include "logger/logger.h"
-#include "fiber/fiber.h"
+#include "common/fiber.h"
 #include "logger/loggermanager.h"
-#include "fiber/fiberutil.h"
+#include "common/fiberutil.h"
 
 #include <atomic>
 #include <boost/math/policies/policy.hpp>
 #include <cassert>
 #include <cmath>
-#include <concepts>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -23,132 +22,6 @@
 #include <iostream>
 
 static Sptr<LogT::Logger> g_logger = GET_ROOT_LOGGER();
-namespace CurThr {
-
-using namespace FiberT;
-
-static thread_local auto s_RunningFiber = static_cast<Fiber*>(nullptr); // why not make it sptr? maybe for performance
-static thread_local auto s_MainFiber    = Sptr<Fiber> {nullptr};
-
-static auto SetMainFiber(Sptr<Fiber> fiber)
-    -> void
-{
-    s_MainFiber = fiber;
-}
-
-static auto GetMainFiber()
-    -> Sptr<Fiber>
-{
-    return s_MainFiber;
-}
-
-auto GetRunningFiberId()
-    -> std::optional<uint64_t>
-{
-    if (s_RunningFiber != nullptr)
-    {
-        return s_RunningFiber->GetId();
-    }
-    // may no fiber in some thread
-    return std::nullopt;
-}
-
-void SetRunningFiber(Fiber* f)
-{
-    s_RunningFiber = f;
-}
-
-/**
- * @brief 返回当前线程正在执行的协程
- */
-auto GetRunningFiber()
-    -> Sptr<Fiber>
-{
-    return s_RunningFiber != nullptr ? s_RunningFiber->shared_from_this()
-                                     : nullptr;
-}
-
-auto YieldToReady()
-    -> void
-{
-    auto cur_fiber = GetRunningFiber();
-
-    if (cur_fiber == nullptr) [[unlikely]]
-    {
-        throw NullPointerError {"No running Fiber here"};
-    }
-
-#ifndef NO_ASSERT
-    assert(cur_fiber->GetState() == FiberState::RUNNING);
-#endif
-
-    cur_fiber->YieldTo(FiberState::READY);
-}
-
-auto YieldToHold()
-    -> void
-{
-    auto cur_fiber = GetRunningFiber();
-
-    if (cur_fiber == nullptr) [[unlikely]]
-    {
-        throw NullPointerError {"No running Fiber here"};
-    }
-
-#ifndef NO_ASSERT
-    assert(cur_fiber->GetState() == FiberState::RUNNING);
-#endif
-    if (cur_fiber) [[unlikely]]
-    {
-        throw NullPointerError {"No running Fiber here"};
-    }
-    cur_fiber->YieldTo(FiberState::HOLD);
-}
-
-auto YieldToExcept()
-    -> void
-{
-    auto cur_fiber = GetRunningFiber();
-    if (cur_fiber == nullptr) [[unlikely]]
-    {
-        throw NullPointerError {"No running Fiber here"};
-    }
-#ifndef NO_ASSERT
-    assert(cur_fiber->GetState() == FiberState::RUNNING);
-#endif
-    cur_fiber->YieldTo(FiberState::EXCEPT);
-}
-
-auto YieldToTerm()
-    -> void
-{
-    auto cur_fiber = GetRunningFiber();
-
-#ifndef NO_ASSERT
-#endif
-
-    if (cur_fiber) [[unlikely]]
-    {
-        throw NullPointerError {"No running Fiber here"};
-    }
-    cur_fiber->YieldTo(FiberState::TERM);
-}
-
-auto Resume(Sptr<Fiber> fiber)
-    -> void
-{
-
-#ifndef NO_DEBUG
-#endif
-    auto cur_fiber = GetRunningFiber();
-    if (cur_fiber == nullptr) [[unlikely]]
-    {
-        throw NullPointerError {"No Main Fiber running here"};
-    }
-    fiber->Resume();
-}
-
-} // namespace CurThr
 
 namespace FiberT {
 
@@ -159,14 +32,14 @@ static auto s_FiberId           = std::atomic<uint64_t> {0};
 // Sptr<LogT::Logger> g_logger = GET_ROOT_LOGGER(); 需定义为
 
 Fiber::Fiber()
-    : id_ {s_FiberId++}
+    : id_ {++s_FiberId}
     , state_ {FiberState::RUNNING}
     , stk_ {
           nullptr,
           [](void*) -> void {}}
 {
 #ifndef NO_ASSERT
-    assert(CurThr::s_MainFiber == nullptr);
+    assert(CurThr::GetMainFiber() == nullptr);
 #endif
 
     if (auto success = UtilT::SyscallWrapper<-1>(getcontext, &ctx_); not success) [[unlikely]]
@@ -183,24 +56,27 @@ Fiber::Fiber()
 #endif
 }
 
+// todo:deal with the fiber id
 Fiber::Fiber(std::function<void()> cb,
              std::uint32_t stk_size)
-    : id_ {s_FiberId++}
+    : id_ {cb ? ++s_FiberId : c_NonUse}
     , stk_size_ {stk_size == 0 ? c_DefaultStkSize : stk_size}
-    , state_ {FiberState::READY}
+    , state_ {cb ? FiberState::READY : FiberState::UNUSED}
     , stk_ {StackAllocator::Alloc(stk_size_), StackAllocator::Dealloc}
     , callback_ {std::move(cb)}
-// , run_in_scheduler_(run_in_scheduler)
-
 {
     if (auto success = UtilT::SyscallWrapper<-1>(getcontext, &ctx_);
         not success) [[unlikely]]
     {
         throw InitError {"Init the main fiber failed -- " + success.error()};
     }
-    ++s_RunningFiberCount;
+    if (cb)
+        ++s_RunningFiberCount;
 
-    ctx_.uc_link          = nullptr;
+    ctx_.uc_link = nullptr;
+    // talk about: how to set the uc_link like below so that over resume will back to main fiber?
+    // !no, still wrong, the pc counter changed that you will run in chaos
+    // ctx_.uc_link          = &(CurThr::s_MainFiber->ctx_);
     ctx_.uc_stack.ss_sp   = stk_.get();
     ctx_.uc_stack.ss_size = stk_size_;
 
@@ -214,30 +90,29 @@ Fiber::Fiber(std::function<void()> cb,
 Fiber::~Fiber()
 {
 #ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::~Fiber() start to destruct", CurThr::GetRunningFiberId().value());
+    LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::~Fiber() start to destruct", id_);
 #endif
 
-    --s_RunningFiberCount;
+    if (state_ != FiberState::UNUSED)
+        --s_RunningFiberCount;
 
-    if (not IsMainFiber_())
+    if (not IsRootFiber_())
     {
-
 #ifndef NO_ASSERT
         assert(state_ == FiberState::TERM
                || state_ == FiberState::EXCEPT
-               || state_ == FiberState::INIT);
+               || state_ == FiberState::UNUSED);
+        // talk about: why no HOLD here ? cause we do not support to kill a fiber
 #endif
     }
-    else
+    else // for root fiber that use the current thread stack
     {
 #ifndef NO_ASSERT
-        assert(not callback_);
         assert(state_ == FiberState::RUNNING); // 此时主线程一定是执行状态
 #endif
 
 #ifndef NO_ASSERT
-        auto* cur = CurThr::s_RunningFiber;
-        assert(cur == this); // 我认为，非对称的协程模型，
+        assert(CurThr::GetRawRunningFiber() == this); // 我认为，非对称的协程模型，
                              // 主协程释放时，其他子协程必须已经释放
                              //  sylar做法如下，暂时觉得有点多余
                              //  Fiber* cur = CurThr::s_RunningFiber;
@@ -247,21 +122,25 @@ Fiber::~Fiber()
 #endif
         CurThr::SetRunningFiber(nullptr); // in case get the trash value
     }
-
 }
 // 切换到当前协程执行
-void Fiber::Resume()
+void Fiber::Resume_()
 {
 
 #ifndef NO_DEBUG
     LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::Resume()", GetId());
 #endif
-    CurThr::SetRunningFiber(this);
+
 #ifndef NO_ASSERT
-    assert(state_ != FiberState::RUNNING);
+    assert(state_ == FiberState::READY
+           or state_ == FiberState::HOLD);
+    assert(not IsMainFiber_());
 #endif
+
+    CurThr::SetRunningFiber(this);
     SetState(FiberState::RUNNING);
-    if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &(CurThr::s_MainFiber->ctx_), &ctx_); not success) [[unlikely]]
+
+    if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &(CurThr::GetRawMainFiber()->ctx_), &ctx_); not success) [[unlikely]]
     {
         throw SwapError {std::format("swap to the fiber {} failed: {}", GetId(), success.error())};
     }
@@ -276,10 +155,10 @@ auto Fiber::Reset(std::function<void()> cb)
 #endif
 
 #ifndef NO_ASSERT
-    assert(IsMainFiber_()); // main fiber won`t call this function
+    // assert(not IsMainFiber_()); // main fiber won`t call this function
     assert(state_ == FiberState::TERM
            || state_ == FiberState::EXCEPT
-           || state_ == FiberState::INIT);
+           || state_ == FiberState::UNUSED);
 #endif
 
     // reset the ucontext
@@ -295,7 +174,16 @@ auto Fiber::Reset(std::function<void()> cb)
 
     // reset the Fiber state
     callback_ = std::move(cb);
-    SetState(FiberState::INIT);
+
+    SetState(cb ? FiberState::READY : FiberState::UNUSED);
+}
+
+auto Fiber::CreateMainFiber_()
+    -> Sptr<Fiber>
+{
+    auto main_fiber = CreateFiberImpl_();
+    CurThr::SetMainFiber(main_fiber);
+    return main_fiber;
 }
 
 auto Fiber::CreateFiber(std::function<void()> cb,
@@ -304,8 +192,7 @@ auto Fiber::CreateFiber(std::function<void()> cb,
 {
     if (CurThr::GetMainFiber() == nullptr)
     {
-        auto main_fiber = CreateFiberImpl_();
-        CurThr::SetMainFiber(main_fiber);
+        CreateMainFiber_();
     }
 
     return CreateFiberImpl_(cb, stk_size);
@@ -320,11 +207,10 @@ auto Fiber::YieldTo(FiberState next_state)
 #endif
     /// 协程运行完之后会自动yield一次，用于回到主协程，此时状态已为结束状态
     this->SetState(next_state);
-    CurThr::SetRunningFiber(CurThr::s_MainFiber.get());
+    CurThr::SetRunningFiber(CurThr::GetMainFiber().get());
 
-    if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &ctx_, &(CurThr::s_MainFiber->ctx_)); not success) [[unlikely]]
+    if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &ctx_, &(CurThr::GetRawMainFiber()->ctx_)); not success) [[unlikely]]
     {
-
         throw SwapError {"swap to the main fiber failed -- " + success.error()};
     }
     // talk about:  what if a TERM fiber call resume ? how about just return ?
@@ -333,6 +219,9 @@ auto Fiber::YieldTo(FiberState next_state)
 
     // talk about: how about set the ctx_->uc_link = t_MainFiber->ctx_ here? a nice choice or a bad one ?
     // I don`t know yet.
+#ifndef NO_DEBUG
+    LOG_DEBUG(g_logger) << std::format("fiber {} {}: Fiber::YieldTo():bottom already term... back to Fiber::CallBackWrapper", GetId(), FiberStateToString(GetState()));
+#endif
 }
 
 auto Fiber::GetTotalFibers()
@@ -399,6 +288,12 @@ auto Fiber::CallBackWrapper()
 }
 
 auto Fiber::IsMainFiber_() const
+    -> bool
+{
+    return this == CurThr::GetMainFiber().get();
+}
+
+auto Fiber::IsRootFiber_() const
     -> bool
 {
     return stk_size_ == 0;

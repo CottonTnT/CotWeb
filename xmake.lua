@@ -62,6 +62,19 @@ target("testfiber")
     -- add_defines("NO_DEBUG") //开启调试日志
 
 
+target("testscheduler")
+    set_kind("binary")
+    add_deps("logger", "common-lib")
+    add_cxxflags("-fsanitize=address,undefined,leak", {force = true})
+    add_ldflags("-fsanitize=address,undefined,leak", {force = true})
+
+    add_files("test/testscheduler.cpp")
+    add_files("srcs/fiber/*.cpp")
+    add_includedirs("include")
+    add_includedirs("/usr/local/include")
+    add_syslinks("pthread")
+    -- add_defines("NO_DEBUG") //开启调试日志
+
 target("testyaml")
     set_kind("binary")
     add_files("test/testyaml.cpp")
