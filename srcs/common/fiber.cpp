@@ -18,6 +18,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <sys/stat.h>
 #include <ucontext.h>
 #include <iostream>
 
@@ -129,10 +130,13 @@ void Fiber::Resume_()
 #endif
 
 #ifndef NO_ASSERT
-    assert(state_ == FiberState::READY
-           or state_ == FiberState::HOLD);
     assert(not IsMainFiber_());
 #endif
+    if(state_ != FiberState::READY
+       and state_ != FiberState::HOLD)
+    {
+        throw WrongStateError {"Can not resume a fiber that is not READY or HOLD, current state is " + FiberStateToString(state_)};
+    }
 
     // CurThr::SetRunningFiber(this);
     CurThr::SetRunningFiber(this->shared_from_this());
