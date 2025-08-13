@@ -60,7 +60,8 @@ auto GetMainFiber()
 auto GetRawMainFiber()
     -> Fiber*;
 
-void SetRunningFiber(Fiber* f);
+// void SetRunningFiber(Fiber* f);
+void SetRunningFiber(Sptr<Fiber> f);
 
 /**
  * @brief 返回当前线程正在执行的协程

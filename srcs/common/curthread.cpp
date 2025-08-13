@@ -38,7 +38,8 @@ namespace CurThr{
 
 namespace CurThr {
 
-static thread_local auto s_RunningFiber = static_cast<Fiber*>(nullptr); // why not make it sptr? maybe for performance
+static thread_local auto s_RunningFiber = std::weak_ptr<Fiber> {}; // weak_ptr to avoid circular reference
+// static thread_local auto s_RunningFiber = static_cast<Fiber*>(nullptr); // why not make it sptr? maybe for performance
 static thread_local auto s_MainFiber    = Sptr<Fiber> {nullptr};
 
 auto SetMainFiber(Sptr<Fiber> fiber)
@@ -62,18 +63,28 @@ auto GetRawMainFiber()
 auto GetRunningFiberId()
     -> std::optional<uint64_t>
 {
-    if (s_RunningFiber != nullptr)
+    if(auto fiber = GetRunningFiber(); fiber != nullptr)[[likely]]
     {
-        return s_RunningFiber->GetId();
+        return fiber->GetId();
     }
-    // may no fiber in some thread
     return std::nullopt;
+    // if (s_RunningFiber != nullptr)
+    // {
+    //     return s_RunningFiber->GetId();
+    // }
+    // may no fiber in some thread
+    // return std::nullopt;
 }
 
-void SetRunningFiber(Fiber* f)
+void SetRunningFiber(Sptr<Fiber> f)
 {
     s_RunningFiber = f;
 }
+
+// void SetRunningFiber(Sptr<Fiber* f)
+// {
+//     s_RunningFiber = f;
+// }
 
 /**
  * @brief 返回当前线程正在执行的协程
@@ -81,15 +92,15 @@ void SetRunningFiber(Fiber* f)
 auto GetRunningFiber()
     -> Sptr<Fiber>
 {
-    return s_RunningFiber != nullptr ? s_RunningFiber->shared_from_this()
-                                     : nullptr;
+    return s_RunningFiber.lock();
+    // return s_RunningFiber != nullptr ? s_RunningFiber->shared_from_this() : nullptr;
 }
 
-auto GetRawRunningFiber()
-    -> Fiber*
-{
-    return s_RunningFiber;
-}
+// auto GetRawRunningFiber()
+//     -> Fiber*
+// {
+//     return s_RunningFiber;
+// }
 
 auto YieldToReady()
     -> void
@@ -105,7 +116,7 @@ auto YieldToReady()
     assert(cur_fiber->GetState() == FiberState::RUNNING);
 #endif
 
-    cur_fiber->YieldTo(FiberState::READY);
+    cur_fiber->YieldTo_(FiberState::READY);
 }
 
 auto YieldToHold()
@@ -125,7 +136,7 @@ auto YieldToHold()
     {
         throw NullPointerError {"No running Fiber here"};
     }
-    cur_fiber->YieldTo(FiberState::HOLD);
+    cur_fiber->YieldTo_(FiberState::HOLD);
 }
 
 auto YieldToExcept()
@@ -139,7 +150,7 @@ auto YieldToExcept()
 #ifndef NO_ASSERT
     assert(cur_fiber->GetState() == FiberState::RUNNING);
 #endif
-    cur_fiber->YieldTo(FiberState::EXCEPT);
+    cur_fiber->YieldTo_(FiberState::EXCEPT);
 }
 
 auto YieldToTerm()
@@ -154,7 +165,7 @@ auto YieldToTerm()
     {
         throw NullPointerError {"No running Fiber here"};
     }
-    cur_fiber->YieldTo(FiberState::TERM);
+    cur_fiber->YieldTo_(FiberState::TERM);
 }
 
 auto Resume(Sptr<Fiber> fiber)

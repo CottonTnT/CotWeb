@@ -47,7 +47,7 @@ Fiber::Fiber()
         throw InitError {"Init the main fiber failed -- " + success.error()};
     }
 
-    CurThr::SetRunningFiber(this);
+    // CurThr::SetRunningFiber(this);
     // SetCurThrMainThread(this->shared_from_this()); can`t call this->shared_from_this() here
     ++s_RunningFiberCount;
 
@@ -93,6 +93,7 @@ Fiber::~Fiber()
     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::~Fiber() start to destruct", id_);
 #endif
 
+    //todo: is it suitable to manage the s_RunningFiberCount here?
     if (state_ != FiberState::UNUSED)
         --s_RunningFiberCount;
 
@@ -112,13 +113,9 @@ Fiber::~Fiber()
 #endif
 
 #ifndef NO_ASSERT
-        assert(CurThr::GetRawRunningFiber() == this); // 我认为，非对称的协程模型，
-                             // 主协程释放时，其他子协程必须已经释放
-                             //  sylar做法如下，暂时觉得有点多余
-                             //  Fiber* cur = CurThr::s_RunningFiber;
-                             //  if(cur == this) {
-                             //      SetThis(nullptr);
-                             //  }
+        assert(CurThr::GetRunningFiber() == nullptr);
+                             // 我认为，非对称的协程模型，
+                             // root协程释放时，本线程就不应当有其他运行的协程
 #endif
         CurThr::SetRunningFiber(nullptr); // in case get the trash value
     }
@@ -137,7 +134,8 @@ void Fiber::Resume_()
     assert(not IsMainFiber_());
 #endif
 
-    CurThr::SetRunningFiber(this);
+    // CurThr::SetRunningFiber(this);
+    CurThr::SetRunningFiber(this->shared_from_this());
     SetState(FiberState::RUNNING);
 
     if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &(CurThr::GetRawMainFiber()->ctx_), &ctx_); not success) [[unlikely]]
@@ -183,6 +181,7 @@ auto Fiber::CreateMainFiber_()
 {
     auto main_fiber = CreateFiberImpl_();
     CurThr::SetMainFiber(main_fiber);
+    CurThr::SetRunningFiber(main_fiber);
     return main_fiber;
 }
 
@@ -198,17 +197,19 @@ auto Fiber::CreateFiber(std::function<void()> cb,
     return CreateFiberImpl_(cb, stk_size);
 }
 
-auto Fiber::YieldTo(FiberState next_state)
+auto Fiber::YieldTo_(FiberState next_state)
     -> void
 {
 
 #ifndef NO_DEBUG
     LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::YieldTo():from {}->{}", GetId(), FiberStateToString(GetState()), FiberStateToString(next_state));
 #endif
-    /// 协程运行完之后会自动yield一次，用于回到主协程，此时状态已为结束状态
     this->SetState(next_state);
-    CurThr::SetRunningFiber(CurThr::GetMainFiber().get());
 
+    // CurThr::SetRunningFiber(CurThr::GetMainFiber().get());
+    CurThr::SetRunningFiber(CurThr::GetMainFiber());
+
+    //sorry, must use raw ptr here, I try my best
     if (auto success = UtilT::SyscallWrapper<-1>(swapcontext, &ctx_, &(CurThr::GetRawMainFiber()->ctx_)); not success) [[unlikely]]
     {
         throw SwapError {"swap to the main fiber failed -- " + success.error()};
@@ -235,7 +236,7 @@ auto Fiber::CallBackWrapper()
 {
     auto cur = CurThr::GetRunningFiber();
 #ifndef NO_ASSERT
-    assert(cur != nullptr);
+    assert(cur != nullptr and cur->GetState() == FiberState::RUNNING);
 #endif
 #ifndef NO_DEBUG
     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() start", CurThr::GetRunningFiberId().value());
@@ -267,11 +268,14 @@ auto Fiber::CallBackWrapper()
      * 开发者必须处理，不然就crash
      * 我认为不该如此，类比OS里的thread，我们的就是 fiber 的OS，调度器角色，难道你会因为
      * 你其中的一个线程崩掉，就crash 整个 OS吗，absolutly not！
+     * 协程确实应该负责好自身的任务处理，但时 调度器应该负责好协程的调度和管理，但协程中止
+     * 时提它收尸
      */
 
     // -- s_RunningFiberCount; only ~Fiber() will do this, cause you may reuse this fiber before ~Fiber()
-    auto* raw_ptr = cur.get();
+    auto* raw_ptr = cur.get(); //sorry, must use raw ptr here, I try my best
     cur.reset();
+
     // why call reset() here ? if you don`t, the ref count of this fiber won`t be 0(RAII won`t work)
     // If the the fiber destructor will be call after cur.reset()?
 
@@ -281,7 +285,7 @@ auto Fiber::CallBackWrapper()
     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() back To Main Fiber", CurThr::GetRunningFiberId().value());
 #endif
 
-    raw_ptr->YieldTo(raw_ptr->GetState());
+    raw_ptr->YieldTo_(raw_ptr->GetState());
 
     LOG_ERROR(g_logger) << "should never been here!";
     assert(false); // should never reach here

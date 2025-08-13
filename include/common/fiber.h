@@ -17,6 +17,17 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
 
     friend auto  CurThr::Resume(Sptr<Fiber> fiber)
         -> void;
+    friend auto  CurThr::YieldToReady()
+        -> void;
+
+    friend auto  CurThr::YieldToHold()
+        -> void;
+
+    friend auto  CurThr::YieldToExcept()
+        -> void;
+
+    friend auto  CurThr::YieldToTerm()
+        -> void;
 private:
     /**
      * @attention  only for construct of the root Fiber of every thread using the stack of thread, i.e, by default the main fiber which also the schedule fiber of every thread,
@@ -62,6 +73,12 @@ private:
      * @post getState() = EXEC
      */
     void Resume_();
+
+    /**
+     * @brief 将当前协程切换到后台,并设置为READY状态
+     * @post getState() = READY
+     */
+    void YieldTo_(FiberState next_state);
 public:
     Fiber(const Fiber&)                    = delete;
     Fiber(Fiber&&)                         = delete;
@@ -79,7 +96,6 @@ public:
         -> void;
 
 
-
     /**
      * @brief 返回协程id
      */
@@ -95,11 +111,6 @@ public:
     auto SetState(FiberState new_state)
         -> void { state_ = new_state; }
 
-    /**
-     * @brief 将当前协程切换到后台,并设置为READY状态
-     * @post getState() = READY
-     */
-    void YieldTo(FiberState next_state);
 
     /**
      * @details will create the main fiber if it doesn`t exits

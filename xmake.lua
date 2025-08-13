@@ -65,8 +65,8 @@ target("testfiber")
 target("testscheduler")
     set_kind("binary")
     add_deps("logger", "common-lib")
-    add_cxxflags("-fsanitize=address,undefined,leak", {force = true})
-    add_ldflags("-fsanitize=address,undefined,leak", {force = true})
+    -- add_cxxflags("-fsanitize=address,undefined,leak", {force = true}) //use to detect memory leaks
+    -- add_ldflags("-fsanitize=address,undefined,leak", {force = true})
 
     add_files("test/testscheduler.cpp")
     add_files("srcs/fiber/*.cpp")
