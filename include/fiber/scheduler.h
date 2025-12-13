@@ -27,8 +27,8 @@ public:
 
     /**
      * @brief 构造函数
-     * @param[in] threads 线程数量
-     * @param[in] use_caller 是否使用当前调用线程
+     * @param[in] max_worker_thread_num 
+     * @param[in] use_root_thread , use the root thread to schedule the fibers
      * @param[in] name 协程调度器名称
      */
     explicit Scheduler(std::uint32_t max_worker_thread_num = 1,
@@ -155,13 +155,13 @@ private:
 
     MutexType mtx_;
 
-    std::uint32_t max_worker_thread_num_; //工作线程数量，不包含user_caller的主线程
+    std::uint32_t max_worker_thread_num_; //工作线程数量
     std::atomic<std::uint32_t> active_thread_count_{0}; //the number of worker thread, i.e. running task
 
-    std::atomic<std::uint32_t> idle_thread_count_ {0};
+    std::atomic<std::uint32_t> idle_thread_count_ {0}; // the number of thread which waiting for task to run
     std::string name_; 
 
-    std::vector<Sptr<Thr::Thread>> threads_;
+    std::vector<Sptr<Thr::Thread>> thread_pool_; // the thread pool of this scheduler
 
     std::list<ScheduleTask> tasks_; // the queue of fibers waiting for executing
 

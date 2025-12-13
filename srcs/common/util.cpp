@@ -1,5 +1,6 @@
 #include "common/util.h"
 #include "common/util.hpp"
+#include <cstdint>
 #include <dirent.h>
 #include <memory>
 #include <pthread.h>
@@ -20,8 +21,8 @@ auto GetElapseMs()
     return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-auto GetThreadId()
-    -> pid_t
+auto getThreadId()
+    -> uint64_t
 {
     return syscall(SYS_gettid);
 }

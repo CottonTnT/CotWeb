@@ -215,13 +215,14 @@ struct WriteLockTag
 
 
 
+//todo:contraints the locktag
 template <typename LockTag>
 class LockGuard<RWMutex, LockTag> {
 public:
     LockGuard(const LockGuard&)            = delete;
     LockGuard(LockGuard&&)                 = delete;
-    LockGuard& operator=(const LockGuard&) = delete;
-    LockGuard& operator=(LockGuard&&)      = delete;
+    auto operator=(const LockGuard&) -> LockGuard& = delete;
+    auto operator=(LockGuard&&) -> LockGuard&      = delete;
 
     explicit LockGuard(RWMutex& mutex)
         : mtx_(mutex)

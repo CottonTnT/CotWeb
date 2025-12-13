@@ -110,7 +110,7 @@ auto Scheduler::Start()
         return;
     }
 
-    if (not threads_.empty())
+    if (not thread_pool_.empty())
     {
         LOG_ERROR(s_Logger) << "this sheduler start already";
         return;
@@ -118,18 +118,18 @@ auto Scheduler::Start()
 
     auto actual_worker_thread_num = max_worker_thread_num_ - static_cast<std::uint32_t>(use_root_thread_);
 
-    threads_.resize(actual_worker_thread_num);
+    thread_pool_.resize(actual_worker_thread_num);
     for (auto i = 0U; i < actual_worker_thread_num; i++)
     {
         // 线程的执行函数该Scheduler的run方法
         // new Thread()方法内部会创建一个线程执行
-        threads_[i] = std::make_shared<Thr::Thread>(
+        thread_pool_[i] = std::make_shared<Thr::Thread>(
             [scheduler = this]()
                 -> void {
                 scheduler->Run();
             },
             name_ + "_" + std::to_string(i));
-        thread_ids_.push_back(threads_[i]->GetId());
+        thread_ids_.push_back(thread_pool_[i]->GetId());
     }
 }
 
@@ -369,7 +369,7 @@ auto Scheduler::Stop()
     std::vector<Sptr<Thr::Thread>> thrs;
     {
         auto _ = LockGuard<MutexType>(mtx_);
-        thrs.swap(threads_);
+        thrs.swap(thread_pool_);
     }
     for (auto& i : thrs)
     {

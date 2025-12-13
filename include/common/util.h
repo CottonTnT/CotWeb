@@ -15,8 +15,8 @@ namespace UtilT {
 auto GetElapseMs()
     -> uint64_t;
 
-auto GetThreadId()
-    -> pid_t;
+auto getThreadId()
+    -> uint64_t;
 
 auto GetFiberId()
     -> pid_t;
@@ -52,8 +52,8 @@ struct CallGuard
 
     CallGuard(const CallGuard&)            = delete;
     CallGuard(CallGuard&&)                 = delete;
-    CallGuard& operator=(const CallGuard&) = delete;
-    CallGuard& operator=(CallGuard&&)      = delete;
+    auto operator=(const CallGuard&) -> CallGuard& = delete;
+    auto operator=(CallGuard&&) -> CallGuard&      = delete;
     explicit CallGuard(Callback cb);
     ~CallGuard();
 
@@ -61,25 +61,6 @@ private:
     Callback call_;
 };
 
-using Hash_t = std::uint64_t;
-
-inline constexpr Hash_t c_HashBase  = 0xCBF29CE484222325ULL;
-inline constexpr Hash_t c_HashPrime = 0x100000001B3ULL;
-
-/**
- * @brief FNV-1a hash
- * 
- */
-constexpr inline auto cHashString(std::string_view str, Hash_t base = c_HashBase, Hash_t prime = c_HashPrime)
-    -> Hash_t
-{
-
-    Hash_t hash_value = 0;
-    for(auto c : str) 
-        hash_value = (hash_value ^ (c - '\0')) * prime;
-    return hash_value;
-    // return not str.empty() ? ((str[0] -'\0') ^ cHashString(str.substr(1))) * prime: base;
-}
 
 /**
  * @brief trasparent hash to gain performance in STL

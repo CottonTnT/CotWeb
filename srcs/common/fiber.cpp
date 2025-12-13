@@ -1,12 +1,10 @@
 #include "common/allocator.h"
 #include "common/curthread.h"
-#include "common/util.h"
 #include "common/util.hpp"
 #include "common/fiberexception.h"
 #include "common/fiberstate.h"
-#include "logger/logger.h"
 #include "common/fiber.h"
-#include "logger/loggermanager.h"
+#include "logger/LoggerManager.h"
 #include "common/fiberutil.h"
 
 #include <atomic>
@@ -17,12 +15,10 @@
 #include <cstdlib>
 #include <exception>
 #include <memory>
-#include <optional>
 #include <sys/stat.h>
 #include <ucontext.h>
-#include <iostream>
 
-static Sptr<LogT::Logger> g_logger = GET_ROOT_LOGGER();
+// static Sptr<LogT::Logger> g_logger = GET_ROOT_LOGGER();
 
 namespace FiberT {
 
@@ -52,9 +48,9 @@ Fiber::Fiber()
     // SetCurThrMainThread(this->shared_from_this()); can`t call this->shared_from_this() here
     ++s_RunningFiberCount;
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << "Fiber::Fiber() main id = " << id_;
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << "Fiber::Fiber() main id = " << id_;
+// #endif
 }
 
 // todo:deal with the fiber id
@@ -83,16 +79,16 @@ Fiber::Fiber(std::function<void()> cb,
 
     makecontext(&ctx_, CallBackWrapper, 0);
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << "Fiber::Fiber() sub id = " << id_;
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << "Fiber::Fiber() sub id = " << id_;
+// #endif
 }
 
 Fiber::~Fiber()
 {
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::~Fiber() start to destruct", id_);
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::~Fiber() start to destruct", id_);
+// #endif
 
     //todo: is it suitable to manage the s_RunningFiberCount here?
     if (state_ != FiberState::UNUSED)
@@ -125,9 +121,9 @@ Fiber::~Fiber()
 void Fiber::Resume_()
 {
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::Resume()", GetId());
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::Resume()", GetId());
+// #endif
 
 #ifndef NO_ASSERT
     assert(not IsMainFiber_());
@@ -152,9 +148,9 @@ auto Fiber::Reset(std::function<void()> cb)
     -> void
 {
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::Reset()", GetId());
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::Reset()", GetId());
+// #endif
 
 #ifndef NO_ASSERT
     // assert(not IsMainFiber_()); // main fiber won`t call this function
@@ -205,9 +201,9 @@ auto Fiber::YieldTo_(FiberState next_state)
     -> void
 {
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::YieldTo():from {}->{}", GetId(), FiberStateToString(GetState()), FiberStateToString(next_state));
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : Fiber::YieldTo():from {}->{}", GetId(), FiberStateToString(GetState()), FiberStateToString(next_state));
+// #endif
     this->SetState(next_state);
 
     // CurThr::SetRunningFiber(CurThr::GetMainFiber().get());
@@ -224,9 +220,9 @@ auto Fiber::YieldTo_(FiberState next_state)
 
     // talk about: how about set the ctx_->uc_link = t_MainFiber->ctx_ here? a nice choice or a bad one ?
     // I don`t know yet.
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} {}: Fiber::YieldTo():bottom already term... back to Fiber::CallBackWrapper", GetId(), FiberStateToString(GetState()));
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} {}: Fiber::YieldTo():bottom already term... back to Fiber::CallBackWrapper", GetId(), FiberStateToString(GetState()));
+// #endif
 }
 
 auto Fiber::GetTotalFibers()
@@ -242,9 +238,9 @@ auto Fiber::CallBackWrapper()
 #ifndef NO_ASSERT
     assert(cur != nullptr and cur->GetState() == FiberState::RUNNING);
 #endif
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() start", CurThr::GetRunningFiberId().value());
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() start", CurThr::GetRunningFiberId().value());
+// #endif
     try
     {
         cur->callback_();
@@ -254,16 +250,16 @@ auto Fiber::CallBackWrapper()
     {
 
         cur->SetState(FiberState::EXCEPT);
-        LOG_ERROR(g_logger) << "Fiber Except: "
-                            << ex.what()
-                            << " fiber_id=" << cur->GetId()
-                            << UtilT::BacktraceToString();
+        // LOG_ERROR(g_logger) << "Fiber Except: "
+        //                     << ex.what()
+        //                     << " fiber_id=" << cur->GetId()
+        //                     << UtilT::BacktraceToString();
     } catch (...)
     {
         cur->SetState(FiberState::EXCEPT);
-        LOG_ERROR(g_logger) << "Fiber Except"
-                            << " fiber_id=" << cur->GetId()
-                            << UtilT::BacktraceToString();
+        // LOG_ERROR(g_logger) << "Fiber Except"
+        //                     << " fiber_id=" << cur->GetId()
+        //                     << UtilT::BacktraceToString();
     }
 
     /*
@@ -285,13 +281,13 @@ auto Fiber::CallBackWrapper()
 
     // No, cause the handle of this fiber is still hold by main fiber, and the handle always be a Sptr of Fiber
 
-#ifndef NO_DEBUG
-    LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() back To Main Fiber", CurThr::GetRunningFiberId().value());
-#endif
+// #ifndef NO_DEBUG
+//     LOG_DEBUG(g_logger) << std::format("fiber {} : fiber::CallBackWrapper() back To Main Fiber", CurThr::GetRunningFiberId().value());
+// #endif
 
     raw_ptr->YieldTo_(raw_ptr->GetState());
 
-    LOG_ERROR(g_logger) << "should never been here!";
+    // LOG_ERROR(g_logger) << "should never been here!";
     assert(false); // should never reach here
 }
 

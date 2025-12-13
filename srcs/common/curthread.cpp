@@ -6,19 +6,18 @@
 #include <unistd.h>
 namespace CurThr{
 
-    static constexpr pid_t c_NotSet = -1;
-
-    static thread_local pid_t s_CachedTid = c_NotSet ;
+    static constexpr unsigned int c_not_set = -1;
+    static thread_local uint64_t s_CachedTid = c_not_set ;
     static thread_local std::string  s_ThreadName = "UnKnown";
 
     auto GetId()
-        -> pid_t
+        -> std::jthread::id
     {
-        if (s_CachedTid == c_NotSet)
+        if (s_CachedTid == c_not_set)
         {
-            s_CachedTid = UtilT::GetThreadId();
+            s_CachedTid = UtilT::getThreadId();
         }
-        return s_CachedTid;
+        return std::jthread::id{pthread_t{s_CachedTid}};
     }
 
     auto GetName()

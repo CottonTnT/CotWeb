@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <thread>
 #include <unistd.h>
 #include <string>
 
@@ -9,7 +10,7 @@
 namespace CurThr{
 
     auto GetId()
-        -> pid_t;
+        -> std::jthread::id;
     
     auto GetName()
         -> std::string;
