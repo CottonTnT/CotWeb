@@ -29,7 +29,7 @@ void TimeServer::start()
 
 void TimeServer::onConnection(const TcpConnectionPtr& conn)
 {
-    LOG(log, "TimeServer - {} ->  is  {}", conn->getPeerAddress().toIpPortRepr(), conn->isConnected() ? "UP" : "DOWN");
+    LOG_DEBUG_FMT(log, "TimeServer - {} ->  is  {}", conn->getPeerAddress().toIpPortRepr(), conn->isConnected() ? "UP" : "DOWN");
     if (conn->isConnected())
     {
         time_t now   = ::time(NULL);
@@ -44,5 +44,5 @@ void TimeServer::onMessage(const TcpConnectionPtr& conn,
                            Timestamp time)
 {
     auto msg = std::string {buf.readAllAsString()};
-    LOG<LogLevel::INFO>(log, "{} discards {} bytes received at {}", conn->getName(), msg.size(), time.toString());
+    LOG_INFO_FMT(log, "{} discards {} bytes received at {}", conn->getName(), msg.size(), time.toString());
 }

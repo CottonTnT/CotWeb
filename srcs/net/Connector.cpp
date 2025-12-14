@@ -33,12 +33,12 @@ Connector::Connector(EventLoop* loop, const InetAddress& peerAddr)
     , retry_timer_id_ {0}
 // 数据成员中其实是有Channel对象的,但却并没有初始化,因为在连接成功的时候才能有一个有效的fd,那时才可以创建一个有效的Channel
 {
-    LOG(log, "ctor[{}]", std::bit_cast<uint64_t>(this));
+    LOG_DEBUG_FMT(log, "ctor[{}]", std::bit_cast<uint64_t>(this));
 }
 
 Connector::~Connector()
 {
-    LOG(log, "dtor[{}]", std::bit_cast<uint64_t>(this));
+    LOG_DEBUG_FMT(log, "dtor[{}]", std::bit_cast<uint64_t>(this));
     assert(channel_ == nullptr);
 }
 
@@ -61,7 +61,7 @@ void Connector::startInLoop_()
     }
     else
     {
-        LOG(log, "do not connect");
+        LOG_DEBUG_FMT(log, "do not connect");
     }
 }
 
@@ -92,7 +92,7 @@ void Connector::stopInLoop_()
         auto sockfd = removeAndResetChannel_();
 
         Sock::close(sockfd);
-        LOG<LogLevel::DEBUG>(log, "stop---");
+        LOG_DEBUG_FMT(log, "stop---");
     }
 }
 
@@ -125,12 +125,12 @@ void Connector::connectPeer_()
         case EBADF:
         case EFAULT:
         case ENOTSOCK:
-            LOG<LogLevel::SYSERR>(log, "connect error in Connector::startInLoop {} {}", saved_errno, strerror(saved_errno));
+            LOG_SYSERR_FMT(log, "connect error in Connector::startInLoop {} {}", saved_errno, strerror(saved_errno));
             Sock::close(sockfd);
             break;
 
         default:
-            LOG<LogLevel::SYSERR>(log, "Unexpected error in Connector::startInLoop {}", saved_errno);
+            LOG_SYSERR_FMT(log, "Unexpected error in Connector::startInLoop {}", saved_errno);
             Sock::close(sockfd);
             // connectErrorCallback_();
             break;
@@ -178,7 +178,7 @@ void Connector::resetChannel_()
 
 void Connector::channelWriteCB_()
 {
-    LOG<LogLevel::TRACE>(log, "Connector::channelWriteCB_ {}", static_cast<int>(state_));
+    LOG_TRACE_FMT(log, "Connector::channelWriteCB_ {}", static_cast<int>(state_));
 
     if (state_ == Connecting)
     {
@@ -186,12 +186,12 @@ void Connector::channelWriteCB_()
         auto err    = Sock::getSocketError(sockfd);
         if (err)
         {
-            LOG<LogLevel::WARN>(log, "Connector::handleWrite - SO_ERROR = {} {}", err, strerror(err));
+            LOG_WARN_FMT(log, "Connector::handleWrite - SO_ERROR = {} {}", err, strerror(err));
             retry_(sockfd);
         }
         else if (Sock::isSelfConnect(sockfd))
         {
-            LOG<LogLevel::WARN>(log, "Connector::handleWrite - Self connect");
+            LOG_WARN_FMT(log, "Connector::handleWrite - Self connect");
             retry_(sockfd);
         }
         else
@@ -216,13 +216,13 @@ void Connector::channelWriteCB_()
 
 void Connector::channelErrorCB_()
 {
-    LOG<LogLevel::ERROR>(log, "Connector::handleError state={}", static_cast<int>(state_.load()));
+    LOG_ERROR_FMT(log, "Connector::handleError state={}", static_cast<int>(state_.load()));
     if (state_ == Connecting)
     {
         auto sockfd = removeAndResetChannel_();
         auto err    = Sock::getSocketError(sockfd);
         // todo:log
-        LOG<LogLevel::TRACE>(log, "Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
+        LOG_TRACE_FMT(log, "Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
         retry_(sockfd);
     }
 }
@@ -234,13 +234,13 @@ void Connector::retry_(int sockfd)
     if (in_connecting_)
     {
         // 一定间隔后充实
-        LOG<LogLevel::INFO>(log, "Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
+        LOG_TRACE_FMT(log, "Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
         retry_timer_id_ = loop_->runAfter(retry_delay_ms_ / 1000.0,
                                           [this] { this->startInLoop_(); });
         retry_delay_ms_ = std::min(retry_delay_ms_ * 2, c_max_retry_delay_ms);
     }
     else
     {
-        LOG<LogLevel::DEBUG>(log, "do not connecting");
+        LOG_DEBUG_FMT(log, "do not connecting");
     }
 }

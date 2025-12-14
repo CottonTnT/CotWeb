@@ -85,12 +85,12 @@ EventLoop::EventLoop()
     , wakeup_fd_ {createEventfd()}
     , wakeup_channel_ {new Channel {this, wakeup_fd_}}
 {
-    LOG(log, "EventLoop created {} in thread {}\n", std::bit_cast<uint64_t>(this), owner_tid_);
+    LOG_DEBUG_FMT(log, "EventLoop created {} in thread {}\n", std::bit_cast<uint64_t>(this), owner_tid_);
     // only one loop per thread
     if (t_event_loop != nullptr)
     {
         // todo log and exit
-        LOG<LogLevel::FATAL>(log, "Another EventLoop %p exists in this thread %d\n", std::bit_cast<uint64_t>(t_event_loop), owner_tid_);
+        LOG_FATAL_FMT(log, "Another EventLoop %p exists in this thread %d\n", std::bit_cast<uint64_t>(t_event_loop), owner_tid_);
     }
     else
         t_event_loop = this;
@@ -136,7 +136,7 @@ void EventLoop::loop(std::error_code& ec)
         ec = EventLoopErrcCode::NotInOwnerLoop;
         return;
     }
-    LOG<LogLevel::INFO>(log,"EventLoop {} start looping\n", std::bit_cast<uint64_t>(this));
+    LOG_INFO_FMT(log,"EventLoop {} start looping\n", std::bit_cast<uint64_t>(this));
     while (not quit_.load())
     {
         active_channels_.clear();
@@ -158,7 +158,7 @@ void EventLoop::loop(std::error_code& ec)
         // 3. 执行 EventLoop 内部任务队列中的任务
         runPendingTasks_();
     }
-    LOG<LogLevel::INFO>(log,"EventLoop %p stop looping.\n", std::bit_cast<uint64_t>(this));
+    LOG_INFO_FMT(log,"EventLoop %p stop looping.\n", std::bit_cast<uint64_t>(this));
     looping_ = false;
 }
 

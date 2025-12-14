@@ -63,7 +63,7 @@ TcpClient::TcpClient(EventLoop* loop,
         this->initTcpConnection_(sockfd);
     });
     // FIXME setConnectFailedCallback
-    LOG<LogLevel::INFO>(log, "TcpClient::TcpClient[{}] - connector {}", name_, std::bit_cast<uint64_t>(connector_.get()));
+    LOG_TRACE_FMT(log, "TcpClient::TcpClient[{}] - connector {}", name_, std::bit_cast<uint64_t>(connector_.get()));
 }
 
 TcpClient::~TcpClient()
@@ -108,7 +108,7 @@ void TcpClient::connect()
     if (not already_start_connect_.exchange(true))
     {
         // FIXME: check state
-        LOG<LogLevel::INFO>(log, "TcpClient::connect[{}] - connecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
+        LOG_INFO_FMT(log, "TcpClient::connect[{}] - connecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
         connector_->start();
     }
 }
@@ -186,7 +186,7 @@ void TcpClient::removeConnection_(const TcpConnectionPtr& conn)
 
     if (retry_ && already_start_connect_.load())
     {
-        LOG<LogLevel::INFO>(log, "TcpClient::connect[{}] - Reconnecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
+        LOG_INFO_FMT(log, "TcpClient::connect[{}] - Reconnecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
         connector_->restart();
     }
 }

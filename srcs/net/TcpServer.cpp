@@ -45,7 +45,7 @@ TcpServer::TcpServer(EventLoop* loop,
 TcpServer::~TcpServer()
 {
     base_loop_->assertInOwnerThread();
-    LOG<LogLevel::TRACE>(log, "TcpServer::~TcpServer[{}] destructing", name_);
+    LOG_DEBUG_FMT(log, "TcpServer::~TcpServer[{}] destructing", name_);
 
     for (auto& item : connections_)
     {

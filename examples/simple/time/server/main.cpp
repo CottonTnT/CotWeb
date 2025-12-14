@@ -10,7 +10,7 @@ static auto log = GET_ROOT_LOGGER();
 auto main()
     -> int
 {
-    LOG<LogLevel::INFO>(log, "pid = {}", getpid());
+    LOG_INFO_FMT(log, "pid = {}", getpid());
     auto loop = EventLoop {};
     auto listenAddr = InetAddress{2037, true};
     auto server = TimeServer(&loop, listenAddr);

@@ -23,7 +23,7 @@ static auto log = GET_ROOT_LOGGER();
 
 void defaultConnectionCallback(const TcpConnectionPtr& conn)
 {
-    LOG<LogLevel::TRACE>(log, "defaultConnectionCallback: {}->{} is {}",
+    LOG_TRACE_FMT(log, "defaultConnectionCallback: {}->{} is {}",
                          conn->getLocalAddress().toIpPortRepr(),
                          conn->getPeerAddress().toIpPortRepr(),
                          conn->isConnected() ? "UP" : "DOWN");

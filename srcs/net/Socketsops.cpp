@@ -36,8 +36,7 @@ auto createNonblockingOrDie(sa_family_t family)
     auto sockfd = ::socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (sockfd < 0)
     {
-        LOG<LogLevel::SYSFATAL>(log, "createNonblockingOrDie");
-        // LOG_SYSFATAL << "createNonblockingOrDie";
+        LOG_SYSFATAL_FMT(log, "createNonblockingOrDie");
     }
     return sockfd;
 }

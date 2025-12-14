@@ -48,7 +48,7 @@ void Logger::log(const LogEvent& event, std::error_code& ec) const
         ec = LogErrcCode::NoAppender;
         return;
     }
-    if (event.getLevel() >= level_)
+    if (isLevelEnabled(event.getLevel()))
     {
         std::ranges::for_each(appenders_,
                               [&event](Sptr<AppenderFacade> appender) {
