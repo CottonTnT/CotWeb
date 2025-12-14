@@ -2,6 +2,7 @@
 
 #include "net/Callbacks.h"
 #include "TcpConnection.h"
+#include "net/InetAddress.h"
 #include <atomic>
 #include <memory>
 
@@ -14,10 +15,6 @@ using ConnectorPtr = std::unique_ptr<Connector>;
 class TcpClient : public std::enable_shared_from_this<TcpClient>{
 
 private:
-    /// Not thread safe, but in loop
-    void initTcpConnection_(int sockfd);
-    /// Not thread safe, but in loop
-    void removeConnection_(const TcpConnectionPtr& conn);
 
     EventLoop* const loop_;
     ConnectorPtr connector_; // avoid revealing Connector
@@ -27,13 +24,19 @@ private:
     MessageCallback message_callback_;
     WriteCompleteCallback write_complete_callback_;
     std::atomic<bool> retry_;       // atomic
-    std::atomic<bool> already_start_connect_;
+    std::atomic<bool> willing_to_connect_;// 表示用户是否希望保持与服务端连接
     // std::atomic<bool> keep_connection_; // atomic, 客户端是否期望与服务器连接
     // always in loop thread
     int next_conn_id_;
     mutable std::mutex mutex_;
     TcpConnectionPtr connection_;
+    const InetAddress server_addr_;
 
+
+    /// Not thread safe, but in loop
+    void initTcpConnection_(int sockfd);
+    /// Not thread safe, but in loop
+    void removeConnection_(const TcpConnectionPtr& conn);
 public:
     TcpClient(const TcpClient&)                    = delete;
     TcpClient(TcpClient&&)                         = delete;

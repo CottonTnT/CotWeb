@@ -23,6 +23,9 @@ public:
         client_->setConnetionCallback([this](const auto& conn) {
             this->onConnection(conn);
         });
+        client_->setConnectionCloseCallback([this](const auto& conn) {
+            this->onConnection(conn);
+        });
         client_->setMessageCallback([this](const auto& conn, auto& buf, auto ts) {
             this->onMessage(conn, buf, ts);
         });

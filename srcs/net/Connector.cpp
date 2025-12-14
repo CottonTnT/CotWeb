@@ -15,19 +15,22 @@
 #include "net/Socketsops.h"
 #include "logger/Logger.h"
 #include "logger/LoggerManager.h"
+#include "net/TcpClient.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
 
 #include <memory>
+#include <utility>
 
 static auto log = GET_ROOT_LOGGER();
 
-Connector::Connector(EventLoop* loop, const InetAddress& peerAddr)
+Connector::Connector(EventLoop* loop, const InetAddress& peerAddr, std::weak_ptr<TcpClient> owner)
     : loop_ {loop}
     , peer_addr_ {peerAddr}
-    , in_connecting_ {false}
+    , onwner_ {std::move(owner)}
+    , is_connect_canceled_ {true}
     , state_ {Disconnected}
     , retry_delay_ms_ {c_init_retry_delay_ms}
     , retry_timer_id_ {0}
@@ -44,18 +47,23 @@ Connector::~Connector()
 
 void Connector::start()
 {
-    if (not in_connecting_.exchange(true))
-    {
-        // 线程的安全性由其所属的 tcpclient 保证
-        loop_->runTask([this] { this->startInLoop_(); });
-    }
+    // is_connect_canceled = false;
+    // 线程的安全性由其所属的 tcpclient 保证
+    loop_->runTask([this, weakOwner= onwner_] {
+        if (weakOwner.lock())
+        {
+            this->startInLoop_();
+        }
+    });
 }
 
 void Connector::startInLoop_()
 {
     loop_->assertInOwnerThread();
     assert(state_ == Disconnected);
-    if (in_connecting_)
+
+    // connectPeer_();
+    if (not is_connect_canceled_)
     {
         connectPeer_();
     }
@@ -67,13 +75,15 @@ void Connector::startInLoop_()
 
 void Connector::stop()
 {
-    if (in_connecting_.exchange(false))
+    is_connect_canceled_ = true;
     {
-        loop_->queueTask([this] {
-            this->stopInLoop_();
+        loop_->queueTask([this, weakOwner = onwner_] {
+            if (auto owner = weakOwner.lock(); owner != nullptr)
+            {
+                this->stopInLoop_();
+            }
         });
     }
-    // FIXME: cancel timer
 }
 
 void Connector::stopInLoop_()
@@ -92,24 +102,28 @@ void Connector::stopInLoop_()
         auto sockfd = removeAndResetChannel_();
 
         Sock::close(sockfd);
-        LOG_DEBUG_FMT(log, "stop---");
+        LOG_DEBUG_FMT(log, "stoping");
     }
 }
 
 void Connector::connectPeer_()
 {
-    auto sockfd      = Sock::createNonblockingOrDie(peer_addr_.getFamily());
+    auto sockfd = Sock::createNonblockingOrDie(peer_addr_.getFamily());
+    // 这里是非阻塞的
     auto ret         = Sock::connect(sockfd, *peer_addr_.getSockAddr());
     auto saved_errno = (ret == 0) ? 0 : errno;
     switch (saved_errno)
     {
+        // 可继续连接的情况
         case 0:
         case EINPROGRESS:
         case EINTR:
         case EISCONN:
+            LOG_INFO_FMT(log, "SockConnect established in Connector:startInLoop [sockfd-{}]", sockfd);
             postSocketConnected_(sockfd);
             break;
 
+        // 可重试的错误
         case EAGAIN:
         case EADDRINUSE:
         case EADDRNOTAVAIL:
@@ -118,6 +132,7 @@ void Connector::connectPeer_()
             retry_(sockfd);
             break;
 
+        // 程序/权限/参数错误
         case EACCES:
         case EPERM:
         case EAFNOSUPPORT:
@@ -141,8 +156,8 @@ void Connector::restart()
 {
     loop_->assertInOwnerThread();
     setState_(Disconnected);
-    retry_delay_ms_ = c_init_retry_delay_ms;
-    in_connecting_  = true;
+    retry_delay_ms_     = c_init_retry_delay_ms;
+    is_connect_canceled_ = true;
     startInLoop_();
 }
 
@@ -152,9 +167,20 @@ void Connector::postSocketConnected_(int sockfd)
     assert(channel_ == nullptr);
     channel_ = std::make_unique<Channel>(loop_, sockfd);
     channel_->setWriteCallback(
-        [this] { this->channelWriteCB_(); });
+        [this, weakOwner = onwner_] {
+            if (auto owner = weakOwner.lock(); owner != nullptr)
+            {
+
+                this->channelWriteCB_();
+            }
+        });
     channel_->setErrorCallback(
-        [this] { this->channelErrorCB_(); });
+        [this, weakOwner = onwner_] {
+            if (auto owner = weakOwner.lock(); owner != nullptr)
+            {
+                this->channelErrorCB_();
+            }
+        });
 
     // channel_->tie(shared_from_this());
     channel_->enableWriting();
@@ -167,6 +193,7 @@ auto Connector::removeAndResetChannel_()
     channel_->remove();
     auto sockfd = channel_->getFd();
     // Can't reset channel_ here, because we are inside Channel::handleEvent
+    // 为什么这里可以这样做，因为 eventloop will doPendingTask after handleEvent in same poll
     loop_->queueTask([this] { this->resetChannel_(); });
     return sockfd;
 }
@@ -197,11 +224,12 @@ void Connector::channelWriteCB_()
         else
         {
             setState_(Connected);
-            if (in_connecting_)
+            // 是否用户已经取消连接
+            if (not is_connect_canceled_)
             {
                 new_connection_callback_(sockfd);
             }
-            else
+            else // 防止幽灵连接
             {
                 Sock::close(sockfd);
             }
@@ -221,7 +249,6 @@ void Connector::channelErrorCB_()
     {
         auto sockfd = removeAndResetChannel_();
         auto err    = Sock::getSocketError(sockfd);
-        // todo:log
         LOG_TRACE_FMT(log, "Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
         retry_(sockfd);
     }
@@ -231,12 +258,18 @@ void Connector::retry_(int sockfd)
 {
     Sock::close(sockfd);
     setState_(Disconnected);
-    if (in_connecting_)
+    if (is_connect_canceled_)
     {
         // 一定间隔后充实
         LOG_TRACE_FMT(log, "Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
         retry_timer_id_ = loop_->runAfter(retry_delay_ms_ / 1000.0,
-                                          [this] { this->startInLoop_(); });
+                                          [this, weakOwner = onwner_] {
+                                              if (auto owner = weakOwner.lock(); owner != nullptr)
+                                              {
+
+                                                  this->startInLoop_();
+                                              }
+                                          });
         retry_delay_ms_ = std::min(retry_delay_ms_ * 2, c_max_retry_delay_ms);
     }
     else

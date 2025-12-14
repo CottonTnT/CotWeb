@@ -277,7 +277,6 @@ void TcpConnection::postConnectionCreate_()
     setState_(Connected);
     socket_channel_->tie(shared_from_this());
     socket_channel_->enableReading();
-
     connection_callback_(shared_from_this());
 }
 

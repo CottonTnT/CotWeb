@@ -13,6 +13,7 @@
 
 #include "Timer.h"
 #include "InetAddress.h"
+#include "net/TcpClient.h"
 
 #include <atomic>
 #include <functional>
@@ -31,26 +32,37 @@ public:
 
 private:
     enum States { Disconnected,
-                  Connecting,
-                  Connected };
+                  Connecting, // 已开始连接，在这里Socket connect是非阻塞的
+                  Connected };// tcpconnection
     static inline constexpr int c_max_retry_delay_ms  = 30 * 1000;
     static inline constexpr int c_init_retry_delay_ms = 500;
 
     EventLoop* const loop_;
     InetAddress peer_addr_;
-    std::atomic<bool> in_connecting_; // atomic, 表示 Connector 是否保持连接, 即是否在尝试连接或重试或已连接
-    std::atomic<States> state_;       // FIXME: use atomic variable
+    std::weak_ptr<TcpClient> onwner_;
+    std::atomic<bool> is_connect_canceled_; // atomic, 表示 Connector 是否保持连接, 即是否在尝试连接或重试或已连接
+    std::atomic<States> state_;            // FIXME: use atomic variable
     std::unique_ptr<Channel> channel_;
     NewConnectionCallback new_connection_callback_;
     int retry_delay_ms_;
     Timer::Id retry_timer_id_;
 
     void setState_(States s) { state_ = s; }
+    /**
+     * @brief 在 loop 线程里真正发起 connect
+     */
     void startInLoop_();
+    /**
+     * @brief 请求取消当前连接流程
+     */
     void stopInLoop_();
+
+    /**
+     * @brief 创建 socket + 发起非阻塞 connect
+     */
     void connectPeer_();
     /**
-     * @brief 连接建立后初始化工作
+     * @brief socket 连接建立后，初始化 tcpconnection
      */
     void postSocketConnected_(int sockfd);
     void channelWriteCB_();
@@ -60,8 +72,10 @@ private:
      */
     void retry_(int sockfd);
 
-    void closeNow_(int sockfd);
     auto removeAndResetChannel_() -> int;
+    /**
+     * @brief 释放 Channel
+     */
     void resetChannel_();
 
 public:
@@ -70,7 +84,7 @@ public:
     auto operator=(const Connector&) -> Connector& = delete;
     auto operator=(Connector&&) -> Connector&      = delete;
 
-    Connector(EventLoop* loop, const InetAddress& peerAddr);
+    Connector(EventLoop* loop, const InetAddress& peerAddr, std::weak_ptr<TcpClient> owner_);
     /**
      * @brief must call stop before ~Connector
      */
@@ -81,16 +95,19 @@ public:
         new_connection_callback_ = cb;
     }
     /**
-     * @brief 用户开始连接或重试
+     * @brief 开始（或允许）连接流程
      * can be called in any thread
      */
     void start();
 
     /**
-     * @brief must be called in loop thread
+     * @brief must be called in loop thread,重置状态并重新开始
      */
     void restart();
 
+    /**
+     * @brief 请求取消当前连接流程
+     */
     void stop(); // can be called in any thread
 
     [[nodiscard]] auto getServerAddress() const
