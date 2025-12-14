@@ -27,7 +27,7 @@ void DaytimeServer::onConnection(const TcpConnectionPtr& conn)
     if (conn->isConnected())
     {
         std::println("DaytimeServer - {}->{} is UP", conn->getPeerAddress().toIpPortRepr(), conn->getLocalAddress().toIpPortRepr());
-        conn->send(Timestamp::Now().ToFormattedString() + "\n");
+        conn->send(Timestamp::Now().toFormattedString() + "\n");
         conn->shutdown();
     }
     else if (conn->isDisconnected())

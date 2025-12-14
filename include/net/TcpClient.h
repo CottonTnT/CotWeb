@@ -11,7 +11,7 @@ using ConnectorPtr = std::unique_ptr<Connector>;
 /**
  * @brief only thread-safe when use it in the same thread with loop
  */
-class TcpClient : std::enable_shared_from_this<TcpClient>{
+class TcpClient : public std::enable_shared_from_this<TcpClient>{
 
 private:
     /// Not thread safe, but in loop

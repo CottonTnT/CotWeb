@@ -11,7 +11,7 @@ class Timestamp
 {
 public:
     Timestamp();
-    explicit Timestamp(int64_t microSecondsSinceEpoch);
+    explicit Timestamp(uint64_t microSecondsSinceEpoch);
 
     static auto Now()
         -> Timestamp;
@@ -28,7 +28,7 @@ public:
      * @brief format the micro_seconds_since_epoch_ to string like "YYYYMMDD HH:MM:SS.microseconds" 
      * @param showMicroseconds whether output microseconds part
      */
-    [[nodiscard]] auto ToFormattedString(bool showMicroseconds = true) const
+    [[nodiscard]] auto toFormattedString(bool showMicroseconds = true) const
             -> std::string;
 
     [[nodiscard]] auto valid() const
@@ -38,7 +38,7 @@ public:
     [[nodiscard]] auto microSecondsSinceEpoch() const
         -> int64_t { return micro_seconds_since_epoch_; }
 
-    [[nodiscard]] auto SecondsSinceEpoch() const
+    [[nodiscard]] auto secondsSinceEpoch() const
         -> time_t;
 
     ///
@@ -58,10 +58,10 @@ public:
 
     static auto FromUnixTime(time_t t, int microseconds)
         -> Timestamp;
-    inline static constexpr auto c_micro_seconds_per_second = 1000 * 1000;
+    inline static constexpr uint64_t c_micro_seconds_per_second = 1000 * 1000;
 
 private:
-    int64_t micro_seconds_since_epoch_;
+    uint64_t micro_seconds_since_epoch_;
 };
 
 inline auto operator<(Timestamp lhs, Timestamp rhs)

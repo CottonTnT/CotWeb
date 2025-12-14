@@ -75,11 +75,19 @@ target("printer")
     add_syslinks("pthread")
 
 
-target("TimerServer")
+target("TimeServer")
     set_kind("binary")
     add_deps("muduo-net", "common-lib", "logger")
     add_includedirs("include", "/usr/local/include", "examples/simple/time/server")
     add_files("examples/simple/time/server/*.cpp")
+    add_syslinks("pthread")
+
+
+target("TimeClient")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs("include", "/usr/local/include", "examples/simple/time/client")
+    add_files("examples/simple/time/client/*.cpp")
     add_syslinks("pthread")
 
 target("testlogger")

@@ -4,7 +4,6 @@
 #include <chrono>
 #include <list>
 #include <source_location>
-#include <stop_token>
 #include <thread>
 #include <utility>
 

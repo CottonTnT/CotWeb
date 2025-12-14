@@ -13,7 +13,7 @@ Timestamp::Timestamp() : micro_seconds_since_epoch_(0)
 {
 }
 
-Timestamp::Timestamp(int64_t microSecondsSinceEpoch)
+Timestamp::Timestamp(uint64_t microSecondsSinceEpoch)
     : micro_seconds_since_epoch_(microSecondsSinceEpoch)
 {
 }
@@ -44,12 +44,13 @@ auto Timestamp::toTimePoint() const
     return TimePoint{std::chrono::microseconds{micro_seconds_since_epoch_}};
 }
 
-auto Timestamp::ToFormattedString(bool showMicroseconds) const
+auto Timestamp::toFormattedString(bool showMicroseconds) const
     -> std::string
 {
     auto buf = std::array<char, 128>{ };
     auto tm_time = tm{};
-    localtime_r(&micro_seconds_since_epoch_, &tm_time);
+    auto seconds_since_epoch_ = secondsSinceEpoch();
+    localtime_r(&seconds_since_epoch_, &tm_time);
     auto stop_pos = std::format_to_n_result<char*>{};
     if (showMicroseconds)
     {
@@ -60,7 +61,7 @@ auto Timestamp::ToFormattedString(bool showMicroseconds) const
                          tm_time.tm_hour,
                          tm_time.tm_min,
                          tm_time.tm_sec,
-                         static_cast<int>(micro_seconds_since_epoch_ % c_micro_seconds_per_second));
+                         seconds_since_epoch_);
     }
     else
     {
@@ -75,7 +76,7 @@ auto Timestamp::ToFormattedString(bool showMicroseconds) const
     stop_pos.out[0] = '\0';
     return buf.data();
 }
-auto Timestamp::SecondsSinceEpoch() const
+auto Timestamp::secondsSinceEpoch() const
     -> time_t
 {
     return static_cast<time_t>(micro_seconds_since_epoch_ / c_micro_seconds_per_second);

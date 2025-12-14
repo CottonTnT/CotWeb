@@ -29,7 +29,7 @@ inline auto NetworkToHost64(uint64_t net64)
   return be64toh(net64);
 }
 
-inline auto NetworkToHost32(uint32_t net32) -> uint32_t
+inline auto networkToHost32(uint32_t net32) -> uint32_t
 {
   return be32toh(net32);
 }

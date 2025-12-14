@@ -56,7 +56,6 @@ TcpClient::TcpClient(EventLoop* loop,
     , message_callback_ {defaultMessageCallback}
     , retry_(false)
     , already_start_connect_ {false}
-    // , keep_connection_(true)
     , next_conn_id_(1)
 {
     connector_->setNewConnectionCallback([this](int sockfd) {

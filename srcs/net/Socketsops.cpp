@@ -99,10 +99,11 @@ auto Accept(int sockfd, struct sockaddr_in6* addr)
     return connfd;
 }
 
-auto Connect(int sockfd, const struct sockaddr* peer_addr)
+
+auto connect(int sockfd, const struct sockaddr& peer_addr)
     -> int
 {
-    return ::connect(sockfd, peer_addr, static_cast<socklen_t>(sizeof(struct sockaddr_storage)));
+    return ::connect(sockfd, &peer_addr, static_cast<socklen_t>(sizeof(struct sockaddr_storage)));
 }
 
 auto Read(int sockfd, void* buf, size_t count)

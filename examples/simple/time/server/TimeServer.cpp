@@ -33,6 +33,9 @@ void TimeServer::onConnection(const TcpConnectionPtr& conn)
     if (conn->isConnected())
     {
         time_t now   = ::time(NULL);
+
+        Timestamp ts(static_cast<uint64_t>(now) * Timestamp::c_micro_seconds_per_second);
+        LOG_INFO_FMT(log, "Server time = {}, {}", now, ts.toFormattedString());
         int32_t be32 = Sock::hostToNetwork32(static_cast<int32_t>(now));
         conn->send(be32);
         conn->shutdown();

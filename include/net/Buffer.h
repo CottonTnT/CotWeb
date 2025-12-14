@@ -196,7 +196,7 @@ public:
         }
         else if constexpr (sizeof(Integer) == 4)
         {
-            return Sock::NetworkToHost32(rst);
+            return Sock::networkToHost32(rst);
         }
         else if constexpr (sizeof(Integer) == 2)
         {
