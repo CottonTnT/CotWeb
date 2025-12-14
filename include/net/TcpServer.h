@@ -19,8 +19,9 @@
 
 /**
  * @brief manager of tcpconnection, dont
+ * @attention  TcpServer 和 其 baseloop 必须在同一个线程中, 才能保证线程安全
  */
-class TcpServer {
+class TcpServer : public std::enable_shared_from_this<TcpServer> {
 public:
     using ConnectionMap = std::unordered_map<std::string, TcpConnectionPtr>;
 
@@ -36,7 +37,7 @@ private:
      * @brief tcpconnection name-> tcpconnection
      */
 
-    EventLoop* base_loop_; // baseloop 用户自定义的loop
+    EventLoop* const base_loop_; // baseloop 用户自定义的loop, must in same thread with tcpserver
 
     const std::string ipport_repr_;
     const std::string name_;

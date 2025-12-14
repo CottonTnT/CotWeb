@@ -5,6 +5,7 @@
 #include "logger/LogErrorCode.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <unordered_map>
 
 /* ======================== Logger ======================== */
@@ -53,6 +54,11 @@ void Logger::log(const LogEvent& event, std::error_code& ec) const
                               [&event](Sptr<AppenderFacade> appender) {
                                   appender->log(event);
                               });
+    }
+    if (event.getLevel() == LogLevel::SYSFATAL)
+    {
+        // todo: bug here, flush all appenders before exit
+        ::exit(EXIT_FAILURE);
     }
 }
 

@@ -8,21 +8,25 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "logger/LogLevel.h"
 #include "net/Buffer.h"
 #include "net/Channel.h"
-#include "net/EventLoop.h"
 #include "net/Socket.h"
 #include "net/TcpConnection.h"
 #include "net/Timestamp.h"
 #include "net/WeakCallback.h"
 
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
+
+static auto log = GET_ROOT_LOGGER();
+
 void defaultConnectionCallback(const TcpConnectionPtr& conn)
 {
-    // todo:log
-    //    LOG_TRACE << conn->localAddress().toIpPort() << " -> "
-    //              << conn->peerAddress().toIpPort() << " is "
-    //              << (conn->connected() ? "UP" : "DOWN");
-    //  do not call conn->forceClose(), because some users want to register message callback only.
+    LOG<LogLevel::TRACE>(log, "defaultConnectionCallback: {}->{} is {}",
+                         conn->getLocalAddress().toIpPortRepr(),
+                         conn->getPeerAddress().toIpPortRepr(),
+                         conn->isConnected() ? "UP" : "DOWN");
 }
 
 void defaultMessageCallback(const TcpConnectionPtr&,
@@ -101,6 +105,7 @@ auto TcpConnection::getTcpInfoString() const
     socket_->getTcpInfoString(buf.data(), sizeof buf);
     return buf.data();
 }
+
 void TcpConnection::send(std::span<char> data)
 {
     send(std::string_view {data.data(), data.size()});

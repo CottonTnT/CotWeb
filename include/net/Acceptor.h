@@ -34,6 +34,8 @@ public:
         -> bool { return listenning_; }
     void listenInOwnerThread();
 
+    void cleanChannelInOnwerLoop_();
+
 private:
     static void defautlNewConnectionCallback_(int sockfd)
     {
@@ -44,7 +46,7 @@ private:
      */
     void socketChannelReadCB_();
 
-    EventLoop *owner_loop_; // Acceptor用的就是用户定义的那个baseLoop 也称作mainLoop
+    EventLoop * const owner_loop_; // Acceptor用的就是用户定义的那个baseLoop 也称作mainLoop
     Socket accept_socket_;
     Channel listen_channel_;
     NewConnectionCallback new_conn_callback_;

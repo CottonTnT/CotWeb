@@ -1,47 +1,39 @@
-// Copyright 2010, Shuo Chen.  All rights reserved.
-// http://code.google.com/p/muduo/
-//
-// Use of this source code is governed by a BSD-style license
-// that can be found in the License file.
-
-// Author: Shuo Chen (chenshuo at chenshuo dot com)
-//
-// This is a public header file, it must only include public header files.
-
-#ifndef MUDUO_NET_TCPCLIENT_H
-#define MUDUO_NET_TCPCLIENT_H
+#pragma once
 
 #include "net/Callbacks.h"
 #include "TcpConnection.h"
 #include <atomic>
+#include <memory>
 
 class Connector;
-using ConnectorPtr = std::shared_ptr<Connector>;
+using ConnectorPtr = std::unique_ptr<Connector>;
 
-class TcpClient {
+/**
+ * @brief only thread-safe when use it in the same thread with loop
+ */
+class TcpClient : std::enable_shared_from_this<TcpClient>{
 
 private:
     /// Not thread safe, but in loop
-    void initNewConnection_(int sockfd);
+    void initTcpConnection_(int sockfd);
     /// Not thread safe, but in loop
-    void RemoveConnection_(const TcpConnectionPtr& conn);
+    void removeConnection_(const TcpConnectionPtr& conn);
 
-    /**
-     * @attention the client dont not own the loop unlike the server
-     */
-    EventLoop* loop_;
+    EventLoop* const loop_;
     ConnectorPtr connector_; // avoid revealing Connector
     const std::string name_;
-    ConnectionCallback conn_established_callback_;
+    ConnectionCallback connection_callback_;
     ConnectionCallback conn_close_callback_;
     MessageCallback message_callback_;
     WriteCompleteCallback write_complete_callback_;
-    std::atomic<bool> retry_;   // atomic
-    std::atomic<bool> not_connect_; // atomic
+    std::atomic<bool> retry_;       // atomic
+    std::atomic<bool> already_start_connect_;
+    // std::atomic<bool> keep_connection_; // atomic, 客户端是否期望与服务器连接
     // always in loop thread
     int next_conn_id_;
     mutable std::mutex mutex_;
     TcpConnectionPtr connection_;
+
 public:
     TcpClient(const TcpClient&)                    = delete;
     TcpClient(TcpClient&&)                         = delete;
@@ -56,21 +48,21 @@ public:
     ~TcpClient(); // force out-line dtor, for std::unique_ptr members.
 
     void connect();
-    void Disconnect();
-    void Stop();
+    void disconnect();
+    void stop();
 
-    auto GetConnection() const
+    auto getConnection() const
         -> TcpConnectionPtr
     {
         auto _ = std::lock_guard<std::mutex> {mutex_};
         return connection_;
     }
 
-    auto GetLoop() const -> EventLoop* { return loop_; }
-    auto Retry() const -> bool { return retry_; }
-    void EnableRetry() { retry_ = true; }
+    auto getLoop() const -> const EventLoop* { return loop_; }
+    auto retry() const -> bool { return retry_; }
+    void enableRetry() { retry_ = true; }
 
-    auto GetName() const
+    auto getName() const
         -> const std::string&
     {
         return name_;
@@ -78,29 +70,26 @@ public:
 
     /// Set connection callback.
     /// Not thread safe.
-    void SetConnectionEstablishedCallback(ConnectionCallback cb)
+    void setConnetionCallback(ConnectionCallback cb)
     {
-        conn_established_callback_ = std::move(cb);
+        connection_callback_ = std::move(cb);
     }
 
-    void SetConnectionCloseCallback(ConnectionCallback cb)
+    void setConnectionCloseCallback(ConnectionCallback cb)
     {
         conn_close_callback_ = std::move(cb);
     }
     /// Set message callback.
     /// Not thread safe.
-    void SetMessageCallback(MessageCallback cb)
+    void setMessageCallback(MessageCallback cb)
     {
         message_callback_ = std::move(cb);
     }
 
     /// Set write complete callback.
     /// Not thread safe.
-    void SetWriteCompleteCallback(WriteCompleteCallback cb)
+    void setWriteCompleteCallback(WriteCompleteCallback cb)
     {
         write_complete_callback_ = std::move(cb);
     }
-
 };
-
-#endif // MUDUO_NET_TCPCLIENT_H

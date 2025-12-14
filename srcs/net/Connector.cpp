@@ -9,76 +9,97 @@
 
 #include "net/Connector.h"
 
+#include "logger/LogLevel.h"
 #include "net/Channel.h"
 #include "net/EventLoop.h"
 #include "net/Socketsops.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
 
-#include <cassert>
-#include <cerrno>
+#include <assert.h>
+#include <errno.h>
+#include <string.h>
 
-Connector::Connector(EventLoop* loop, const InetAddress& serverAddr)
-    : loop_(loop)
-    , server_addr_(serverAddr)
-    , start_connect_(false)
-    , state_(kDisconnected)
-    , retry_delay_ms_(c_init_retry_delay_ms)
+#include <memory>
+
+static auto log = GET_ROOT_LOGGER();
+
+Connector::Connector(EventLoop* loop, const InetAddress& peerAddr)
+    : loop_ {loop}
+    , peer_addr_ {peerAddr}
+    , in_connecting_ {false}
+    , state_ {Disconnected}
+    , retry_delay_ms_ {c_init_retry_delay_ms}
+    , retry_timer_id_ {0}
 // 数据成员中其实是有Channel对象的,但却并没有初始化,因为在连接成功的时候才能有一个有效的fd,那时才可以创建一个有效的Channel
 {
-    // todo:log
-    //  LOG_DEBUG << "ctor[" << this << "]";
+    LOG(log, "ctor[{}]", std::bit_cast<uint64_t>(this));
 }
 
 Connector::~Connector()
 {
-    // todo:log
-    //  LOG_DEBUG << "dtor[" << this << "]";
-    assert(!channel_);
+    LOG(log, "dtor[{}]", std::bit_cast<uint64_t>(this));
+    assert(channel_ == nullptr);
 }
 
 void Connector::start()
 {
-    start_connect_ = true;
-    loop_->runTask([this] { startInLoop_(); }); // FIXME: unsafe
-    // loop_->RunInOwnerThread([connector = shared_from_this()] { connector->StartInLoop_(); }); // FIXME: unsafe
+    if (not in_connecting_.exchange(true))
+    {
+        // 线程的安全性由其所属的 tcpclient 保证
+        loop_->runTask([this] { this->startInLoop_(); });
+    }
 }
 
 void Connector::startInLoop_()
 {
     loop_->assertInOwnerThread();
-    assert(state_ == kDisconnected);
-    if (start_connect_)
+    assert(state_ == Disconnected);
+    if (in_connecting_)
     {
-        connect_();
+        connectPeer_();
     }
     else
     {
-        // todo:log
-        // LOG_DEBUG << "do not connect";
+        LOG(log, "do not connect");
     }
 }
 
 void Connector::stop()
 {
-    start_connect_ = false;
-    loop_->queueTask([this] { stopInLoop_(); }); // FIXME: unsafe
-                                                          // FIXME: cancel timer
+    if (in_connecting_.exchange(false))
+    {
+        loop_->queueTask([this] {
+            this->stopInLoop_();
+        });
+    }
+    // FIXME: cancel timer
 }
 
 void Connector::stopInLoop_()
 {
     loop_->assertInOwnerThread();
-    if (state_ == kConnecting)
+
+    if (retry_timer_id_ != 0)
     {
-        setState_(kDisconnected);
+        loop_->cancelTimer(retry_timer_id_);
+        retry_timer_id_ = 0;
+    }
+
+    if (state_ == Connecting) // 如果正在连接
+    {
+        setState_(Disconnected);
         auto sockfd = removeAndResetChannel_();
-        retry_(sockfd);
+
+        Sock::close(sockfd);
+        LOG<LogLevel::DEBUG>(log, "stop---");
     }
 }
 
-void Connector::connect_()
+void Connector::connectPeer_()
 {
-    auto sockfd      = Sock::createNonblockingOrDie(server_addr_.getFamily());
-    auto ret         = Sock::connect(sockfd, *server_addr_.getSockAddr());
+    auto sockfd      = Sock::createNonblockingOrDie(peer_addr_.getFamily());
+    auto ret         = Sock::connect(sockfd, *peer_addr_.getSockAddr());
     auto saved_errno = (ret == 0) ? 0 : errno;
     switch (saved_errno)
     {
@@ -86,7 +107,7 @@ void Connector::connect_()
         case EINPROGRESS:
         case EINTR:
         case EISCONN:
-            connecting_(sockfd);
+            postSocketConnected_(sockfd);
             break;
 
         case EAGAIN:
@@ -104,14 +125,12 @@ void Connector::connect_()
         case EBADF:
         case EFAULT:
         case ENOTSOCK:
-            // todo:log
-            //  LOG_SYSERR << "connect error in Connector::startInLoop " << savedErrno;
+            LOG<LogLevel::SYSERR>(log, "connect error in Connector::startInLoop {} {}", saved_errno, strerror(saved_errno));
             Sock::close(sockfd);
             break;
 
         default:
-            // todo:log
-            //  LOG_SYSERR << "Unexpected error in Connector::startInLoop " << savedErrno;
+            LOG<LogLevel::SYSERR>(log, "Unexpected error in Connector::startInLoop {}", saved_errno);
             Sock::close(sockfd);
             // connectErrorCallback_();
             break;
@@ -121,25 +140,24 @@ void Connector::connect_()
 void Connector::restart()
 {
     loop_->assertInOwnerThread();
-    setState_(kDisconnected);
+    setState_(Disconnected);
     retry_delay_ms_ = c_init_retry_delay_ms;
-    start_connect_        = true;
+    in_connecting_  = true;
     startInLoop_();
 }
 
-void Connector::connecting_(int sockfd)
+void Connector::postSocketConnected_(int sockfd)
 {
-    setState_(kConnecting);
-    assert(!channel_);
-    channel_.reset(new Channel(loop_, sockfd));
+    setState_(Connecting);
+    assert(channel_ == nullptr);
+    channel_ = std::make_unique<Channel>(loop_, sockfd);
     channel_->setWriteCallback(
-        [this] { HandleWrite_(); }); // FIXME: unsafe
+        [this] { this->channelWriteCB_(); });
     channel_->setErrorCallback(
-        [this] { HandleError_(); }); // FIXME: unsafe
+        [this] { this->channelErrorCB_(); });
 
-    // channel_->tie(shared_from_this()); is not working,
-    // as channel_ is not managed by shared_ptr
-    channel_->enableReading();
+    // channel_->tie(shared_from_this());
+    channel_->enableWriting();
 }
 
 auto Connector::removeAndResetChannel_()
@@ -149,7 +167,7 @@ auto Connector::removeAndResetChannel_()
     channel_->remove();
     auto sockfd = channel_->getFd();
     // Can't reset channel_ here, because we are inside Channel::handleEvent
-    loop_->queueTask([connector = this] { connector->resetChannel_(); }); // FIXME: unsafe
+    loop_->queueTask([this] { this->resetChannel_(); });
     return sockfd;
 }
 
@@ -158,33 +176,28 @@ void Connector::resetChannel_()
     channel_.reset();
 }
 
-void Connector::HandleWrite_()
+void Connector::channelWriteCB_()
 {
-    // todo:log
-    //  LOG_TRACE << "Connector::handleWrite " << state_;
+    LOG<LogLevel::TRACE>(log, "Connector::channelWriteCB_ {}", static_cast<int>(state_));
 
-    if (state_ == kConnecting)
+    if (state_ == Connecting)
     {
         auto sockfd = removeAndResetChannel_();
         auto err    = Sock::getSocketError(sockfd);
         if (err)
         {
-            // todo:log
-            //  LOG_WARN << "Connector::handleWrite - SO_ERROR = "
-            //           << err << " " << strerror_tl(err);
+            LOG<LogLevel::WARN>(log, "Connector::handleWrite - SO_ERROR = {} {}", err, strerror(err));
             retry_(sockfd);
         }
-        else if (Sock::IsSelfConnect(sockfd))
+        else if (Sock::isSelfConnect(sockfd))
         {
-            // todo:log
-            //  LOG_WARN << "Connector::handleWrite - Self connect";
+            LOG<LogLevel::WARN>(log, "Connector::handleWrite - Self connect");
             retry_(sockfd);
         }
         else
         {
-            // todo:log
-            setState_(kConnected);
-            if (connect_)
+            setState_(Connected);
+            if (in_connecting_)
             {
                 new_connection_callback_(sockfd);
             }
@@ -197,20 +210,19 @@ void Connector::HandleWrite_()
     else
     {
         // what happened?
-        assert(state_ == kDisconnected);
+        assert(state_ == Disconnected);
     }
 }
 
-void Connector::HandleError_()
+void Connector::channelErrorCB_()
 {
-    // todo:log
-    //  LOG_ERROR << "Connector::handleError state=" << state_;
-    if (state_ == kConnecting)
+    LOG<LogLevel::ERROR>(log, "Connector::handleError state={}", static_cast<int>(state_.load()));
+    if (state_ == Connecting)
     {
         auto sockfd = removeAndResetChannel_();
         auto err    = Sock::getSocketError(sockfd);
         // todo:log
-        //  LOG_TRACE << "SO_ERROR = " << err << " " << strerror_tl(err);
+        LOG<LogLevel::TRACE>(log, "Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
         retry_(sockfd);
     }
 }
@@ -218,19 +230,17 @@ void Connector::HandleError_()
 void Connector::retry_(int sockfd)
 {
     Sock::close(sockfd);
-    setState_(kDisconnected);
-    if (start_connect_)
+    setState_(Disconnected);
+    if (in_connecting_)
     {
-        // todo:log
-        //  LOG_INFO << "Connector::retry - Retry connecting to " << serverAddr_.toIpPort()
-        //   << " in " << retryDelayMs_ << " milliseconds. ";
-        loop_->runAfter(retry_delay_ms_ / 1000.0,
-                        [connector = shared_from_this()] { connector->startInLoop_(); });
+        // 一定间隔后充实
+        LOG<LogLevel::INFO>(log, "Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
+        retry_timer_id_ = loop_->runAfter(retry_delay_ms_ / 1000.0,
+                                          [this] { this->startInLoop_(); });
         retry_delay_ms_ = std::min(retry_delay_ms_ * 2, c_max_retry_delay_ms);
     }
     else
     {
-        // todo:log
-        //  LOG_DEBUG << "do not connect";
+        LOG<LogLevel::DEBUG>(log, "do not connecting");
     }
 }

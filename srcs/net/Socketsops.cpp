@@ -18,6 +18,10 @@
 
 #include "net/Socketsops.h"
 #include "net/Endian.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
+
+static auto log = GET_ROOT_LOGGER();
 
 namespace {
 
@@ -32,7 +36,7 @@ auto createNonblockingOrDie(sa_family_t family)
     auto sockfd = ::socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (sockfd < 0)
     {
-        //todo: log and exit
+        LOG<LogLevel::SYSFATAL>(log, "createNonblockingOrDie");
         // LOG_SYSFATAL << "createNonblockingOrDie";
     }
     return sockfd;
@@ -43,8 +47,8 @@ void BindOrDie(int sockfd, const struct sockaddr* addr)
     auto ret = ::bind(sockfd, addr, static_cast<socklen_t>(sizeof(struct sockaddr_in6)));
     if (ret < 0)
     {
-        //todo: log and exit
-        // LOG_SYSFATAL << "bindOrDie";
+        // todo: log and exit
+        //  LOG_SYSFATAL << "bindOrDie";
     }
 }
 
@@ -140,9 +144,9 @@ void toIpPortRepr(char* buf, size_t size, const struct sockaddr* addr)
     {
         buf[0] = '[';
         toIp(buf + 1, size - 1, addr);
-        auto end                       = ::strlen(buf);
+        auto end          = ::strlen(buf);
         const auto* addr6 = sockaddrCast<sockaddr_in6>(addr);
-        auto port                    = networkToHost16(addr6->sin6_port);
+        auto port         = networkToHost16(addr6->sin6_port);
         assert(size > end);
         snprintf(buf + end, size - end, "]:%u", port);
         return;
@@ -204,7 +208,7 @@ auto getSocketError(int sockfd) -> int
     return optval;
 }
 
-auto GetLocalAddr(int sockfd)
+auto getLocalAddr(int sockfd)
     -> struct sockaddr_storage
 {
     struct sockaddr_storage local_addr
@@ -220,7 +224,7 @@ auto GetLocalAddr(int sockfd)
 }
 
 auto
-GetPeerAddr(int sockfd)
+getPeerAddr(int sockfd)
     -> struct sockaddr_storage
 {
     struct sockaddr_storage peeraddr
@@ -235,10 +239,10 @@ GetPeerAddr(int sockfd)
 }
 
 auto
-IsSelfConnect(int sockfd) -> bool
+isSelfConnect(int sockfd) -> bool
 {
-    auto localaddr = GetLocalAddr(sockfd);
-    auto peeraddr  = GetPeerAddr(sockfd);
+    auto localaddr = getLocalAddr(sockfd);
+    auto peeraddr  = getPeerAddr(sockfd);
     if (localaddr.ss_family == AF_INET)
     {
         const auto* laddr4 = reinterpret_cast<struct sockaddr_in*>(&localaddr);

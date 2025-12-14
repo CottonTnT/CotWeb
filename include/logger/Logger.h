@@ -27,7 +27,7 @@ class Logger : public std::enable_shared_from_this<Logger> {
 private:
     inline static std::atomic<uint32_t> auto_logger_id_ = 0;
     std::string name_;                          // 日志器名称
-    LogLevel level_ = LogLevel::DEBUG;          // 日志级别
+    LogLevel level_ = LogLevel::ALL;          // 日志级别
     std::list<Sptr<AppenderFacade>> appenders_; // Appender集合
 
 public:
@@ -65,4 +65,15 @@ inline auto LogFMTLevel(const Logger& logger, LogLevel loglevel)
     logger.log(LogEvent {logger.getLoggerName(), loglevel, 0, std::this_thread::get_id(), CurThr::GetName(), 0, 0, std::source_location::current()});
 }
 
+template <LogLevel loglevel = LogLevel::DEBUG, typename... Args>
+void LOG(Sptr<Logger> logger, std::format_string<Args...> fmt, Args&&... args)
+{
+    LogFMTLevel(*logger, loglevel, fmt, std::forward<Args>(args)...);
+}
+
+template <LogLevel loglevel = LogLevel::DEBUG>
+void LOG(Sptr<Logger> logger)
+{
+    LogFMTLevel(*logger, loglevel);
+}
 #endif

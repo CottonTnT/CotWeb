@@ -1,0 +1,48 @@
+#include "TimeServer.h"
+#include "logger/LogLevel.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
+
+#include "net/Endian.h"
+#include "net/TcpServer.h"
+
+static auto log = GET_ROOT_LOGGER();
+TimeServer::TimeServer(EventLoop* loop,
+                       const InetAddress& listenAddr)
+    : server_ {new TcpServer {loop, listenAddr, "TimeServer"}}
+{
+    server_->setConnectionEstablishedCallback([this](const auto& conn) {
+        this->onConnection(conn);
+    });
+    server_->setConnectionCloseCallback([this](const auto& conn) {
+        this->onConnection(conn);
+    });
+    server_->setMessageCallback([this](const auto& conn, auto& buf, auto ts) {
+        this->onMessage(conn, buf, ts);
+    });
+}
+
+void TimeServer::start()
+{
+    server_->start();
+}
+
+void TimeServer::onConnection(const TcpConnectionPtr& conn)
+{
+    LOG(log, "TimeServer - {} ->  is  {}", conn->getPeerAddress().toIpPortRepr(), conn->isConnected() ? "UP" : "DOWN");
+    if (conn->isConnected())
+    {
+        time_t now   = ::time(NULL);
+        int32_t be32 = Sock::hostToNetwork32(static_cast<int32_t>(now));
+        conn->send(be32);
+        conn->shutdown();
+    }
+}
+
+void TimeServer::onMessage(const TcpConnectionPtr& conn,
+                           Buffer& buf,
+                           Timestamp time)
+{
+    auto msg = std::string {buf.readAllAsString()};
+    LOG<LogLevel::INFO>(log, "{} discards {} bytes received at {}", conn->getName(), msg.size(), time.toString());
+}

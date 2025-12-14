@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <exception>
@@ -13,11 +14,16 @@
 
 #include "net/EventLoop.h"
 #include "common/curthread.h"
+#include "logger/LogLevel.h"
 #include "net/EventLoopErrc.h"
 #include "net/Channel.h"
 #include "net/Epoller.h"
 #include "net/Timestamp.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
 
+
+static auto log = GET_ROOT_LOGGER();
 namespace {
 auto createEventfd()
     -> int
@@ -79,13 +85,12 @@ EventLoop::EventLoop()
     , wakeup_fd_ {createEventfd()}
     , wakeup_channel_ {new Channel {this, wakeup_fd_}}
 {
-    // LOG_DEBUG("EventLoop created %p in thread %d\n", this, threadId_);
+    LOG(log, "EventLoop created {} in thread {}\n", std::bit_cast<uint64_t>(this), owner_tid_);
     // only one loop per thread
     if (t_event_loop != nullptr)
     {
         // todo log and exit
-        // LOG_FATAL("Another EventLoop %p exists in this thread %d\n", t_loopInThisThread, threadId_);
-        std::terminate();
+        LOG<LogLevel::FATAL>(log, "Another EventLoop %p exists in this thread %d\n", std::bit_cast<uint64_t>(t_event_loop), owner_tid_);
     }
     else
         t_event_loop = this;
@@ -131,7 +136,7 @@ void EventLoop::loop(std::error_code& ec)
         ec = EventLoopErrcCode::NotInOwnerLoop;
         return;
     }
-    // LOG_INFO("EventLoop %p start looping\n", this);
+    LOG<LogLevel::INFO>(log,"EventLoop {} start looping\n", std::bit_cast<uint64_t>(this));
     while (not quit_.load())
     {
         active_channels_.clear();
@@ -153,7 +158,7 @@ void EventLoop::loop(std::error_code& ec)
         // 3. 执行 EventLoop 内部任务队列中的任务
         runPendingTasks_();
     }
-    // LOG_INFO("EventLoop %p stop looping.\n", this);
+    LOG<LogLevel::INFO>(log,"EventLoop %p stop looping.\n", std::bit_cast<uint64_t>(this));
     looping_ = false;
 }
 

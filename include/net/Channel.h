@@ -41,7 +41,7 @@ private:
     void update_();
     void HandleEventWithGuard_(Timestamp receiveTime);
 
-    EventLoop* loop_;            // 事件循环
+    EventLoop* const loop_;            // 事件循环
     const int fd_;               // fd，Poller监听的对象, socket, eventfd, timerfd
     uint32_t registered_events_; // 注册fd感兴趣的事件
     uint32_t received_events_;   // Poller返回的具体发生的事件

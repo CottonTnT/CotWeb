@@ -7,7 +7,6 @@
 
 
 
-
 LoggerManager::LoggerManager()
     : root_(new Logger("root"))
     , loggers_{

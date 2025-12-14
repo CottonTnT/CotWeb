@@ -9,8 +9,7 @@
 #include "net/Timer.h"
 #include <atomic>
 
-
-std::atomic<uint64_t> Timer::s_auto_incr_id_;
+std::atomic<uint64_t> Timer::s_auto_incr_id_ = 0;
 
 void Timer::restart(Timestamp now)
 {

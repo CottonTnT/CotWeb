@@ -9,6 +9,7 @@
 class Timer {
 public:
     using Id = uint64_t;
+    constexpr static uint64_t c_invalid_timer_id = 0;
 public:
     Timer(TimerCallback cb, Timestamp when, double interval)
         : callback_ {std::move(cb)}

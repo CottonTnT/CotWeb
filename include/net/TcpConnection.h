@@ -10,9 +10,9 @@
 #include "net/Callbacks.h"
 #include "net/InetAddress.h"
 #include "net/Timestamp.h"
+#include "net/EventLoop.h"
 
 class Channel;
-class EventLoop;
 class Socket;
 
 /**
@@ -27,6 +27,7 @@ class Socket;
  */
 class TcpConnection : public std::enable_shared_from_this<TcpConnection> {
     friend class TcpServer;
+    friend class TcpClient;
 
 private:
     enum StateE {
@@ -40,7 +41,7 @@ private:
         Disconnecting
     };
 
-    EventLoop* owner_loop_; // one connection owned by one loop only
+    EventLoop* const owner_loop_; // one connection owned by one loop only
     const std::string name_;
     std::atomic<StateE> state_;
     bool reading_;
@@ -52,7 +53,7 @@ private:
 
     const InetAddress local_addr_;
     const InetAddress peer_addr_;
-    ConnectionCallback connection_callback_; // 有新连接建立完成时的回调时的回调
+    ConnectionCallback connection_callback_;        // 有新连接建立完成时的回调时的回调
     MessageCallback msg_callback_;                  // 有读写消息时的回调
     WriteCompleteCallback write_complete_callback_; // 消息发送完成以后的回调
     HighWaterMarkCallback high_watermark_callback_;
@@ -73,7 +74,6 @@ private:
 
     void socketChannelErrorCB_();
 
-
     /**
      * @brief must be called in onwer loop
      */
@@ -90,17 +90,17 @@ private:
     /* ======================== for tcpserver  ======================== */
     // called when TcpServer accepts a new connection
     // should be called only once
-    void postConnectionCreate_(); 
+    void postConnectionCreate_();
     // called when TcpServer has removed me from its map
     // make sure the connection destruct in onwer loop thread
     void destroyConnection_(); // should be called only once
     void socketChannelCloseCB_();
 
 public:
-  /**
-   * @attention User should not create this object.
-   * @brief Constructs a TcpConnection with a connected sockfd
-   */ 
+    /**
+     * @attention User should not create this object.
+     * @brief Constructs a TcpConnection with a connected sockfd
+     */
     TcpConnection(EventLoop* loop,
                   std::string nameArg,
                   int sockfd,
@@ -145,6 +145,26 @@ public:
     void send(std::string_view message);
     void send(Buffer buf);
     void send(std::string message);
+    template <typename Integer>
+        requires(std::is_integral_v<Integer>)
+    void send(Integer integer)
+    {
+
+        if (state_ == Connected)
+        {
+            if (owner_loop_->inOwnerThread())
+            {
+                sendInOwnerLoop_(&integer, sizeof(integer));
+            }
+            else
+            {
+                auto send_msg_task = [tcp_conn = shared_from_this(), integer]() -> void {
+                    tcp_conn->sendInOwnerLoop_(&integer, sizeof(integer));
+                };
+                owner_loop_->runTask(send_msg_task);
+            }
+        }
+    }
 
     // 关闭连接, NOT thread safe, no simultaneous calling
     void shutdown();
@@ -174,7 +194,7 @@ public:
     {
         return context_;
     }
-    void setConnEstablishedCB(const ConnectionCallback& cb)
+    void setConnetionCallback(const ConnectionCallback& cb)
     {
         connection_callback_ = cb;
     }
@@ -205,5 +225,4 @@ public:
         high_watermark_callback_ = cb;
         high_watermark_          = highWaterMark;
     }
-
 };

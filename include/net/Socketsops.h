@@ -81,10 +81,10 @@ auto sockaddrCast(From* from_addr)
         return reinterpret_cast<To*>(from_addr);
 }
 
-auto GetLocalAddr(int sockfd) -> struct sockaddr_storage;
+auto getLocalAddr(int sockfd) -> struct sockaddr_storage;
 
-auto GetPeerAddr(int sockfd) -> struct sockaddr_storage;
-auto IsSelfConnect(int sockfd) -> bool;
+auto getPeerAddr(int sockfd) -> struct sockaddr_storage;
+auto isSelfConnect(int sockfd) -> bool;
 
 } // namespace Sock
 

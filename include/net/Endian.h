@@ -11,7 +11,7 @@ inline auto HostToNetwork64(uint64_t host64)
   return htobe64(host64);
 }
 
-inline auto HostToNetwork32(uint32_t host32)
+inline auto hostToNetwork32(uint32_t host32)
     -> uint32_t
 {
   return htobe32(host32);

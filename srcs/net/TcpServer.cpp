@@ -1,8 +1,14 @@
+#include <latch>
 #include <memory>
 
 #include "net/TcpServer.h"
+#include "logger/LogLevel.h"
 #include "net/Callbacks.h"
 #include "net/TcpConnection.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
+
+static auto log = GET_ROOT_LOGGER();
 
 static auto requiresNonNull(EventLoop* loop)
     -> EventLoop*
@@ -25,7 +31,7 @@ TcpServer::TcpServer(EventLoop* loop,
     , threadpool_ {new EventLoopThreadPool(loop, name_)}
     , conn_established_callback_(defaultConnectionCallback)
     , conn_close_callback_(defaultConnectionCallback)
-    , msg_callback_{ defaultMessageCallback }
+    , msg_callback_ {defaultMessageCallback}
     , started_ {0}
     , next_conn_id_ {1}
 {
@@ -38,6 +44,9 @@ TcpServer::TcpServer(EventLoop* loop,
 
 TcpServer::~TcpServer()
 {
+    base_loop_->assertInOwnerThread();
+    LOG<LogLevel::TRACE>(log, "TcpServer::~TcpServer[{}] destructing", name_);
+
     for (auto& item : connections_)
     {
         auto conn = item.second;
@@ -45,6 +54,24 @@ TcpServer::~TcpServer()
         // 销毁连接
         item.second.reset();
         conn->getLoop()->runTask([conn] {
+            // 这里只是确保连接的销毁操作在其所属的IO线程中执行
+            // 原有的muduo里面是调用的conn->connectDestroyed();
+            // void TcpConnection::connectDestroyed()
+            // {
+            //   loop_->assertInLoopThread();
+            //   if (state_ == kConnected)
+            //   {
+            //     setState(kDisconnected);
+            //     channel_->disableAll();
+
+            //     connectionCallback_(shared_from_this());
+            //   }
+            //   channel_->remove();
+            // }
+            // 但是我这里这里进行了改造，因为原有的在connectDestroyed中去执行
+            // 如上操作是有问题的，因为 tcpconnection 调用closeCallback_ 可能会导致 TcpServer::removeConnectionInLoop，而此时tcpsever 已经销毁
+            // 所以直接默认tcpserver 和 baseloop_ 所在相同的线程，并且其生命周期长于其
+            // baseloop_;
             conn->destroyConnection_();
         });
     }
@@ -109,11 +136,18 @@ void TcpServer::initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAdd
     // new_conn->SetCloseCallback(
     //     std::bind(&TcpServer::RemoveConnection_, this, std::placeholders::_1));
 
-    new_conn->setConnEstablishedCB(conn_established_callback_);
-    new_conn->setCloseCallback([this](const TcpConnectionPtr& conn) {
-        // 2.执行TcpServer内部的连接移除操作
-        this->conn_close_callback_(conn);
-        this->removeConnection_(conn);
+    new_conn->setConnetionCallback(conn_established_callback_);
+
+    // avoid TcpServer destructed before TcpConnection
+    new_conn->setCloseCallback([user_close_cb = conn_close_callback_, a = std::weak_ptr<TcpServer> {shared_from_this()}](const TcpConnectionPtr& conn) {
+        user_close_cb(conn);
+        if (auto guard = a.lock(); guard != nullptr)
+        {
+            // 2.执行TcpServer内部的连接移除操作
+            // guard->conn_close_callback_(conn);
+            guard->removeConnection_(conn);
+            return;
+        }
     });
 
     new_conn->setMessageCallback(msg_callback_);
@@ -130,8 +164,8 @@ void TcpServer::initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAdd
 
 void TcpServer::removeConnection_(const TcpConnectionPtr& conn)
 {
-    // 为什么removeConnectionInLoop()要在Main EventLoop中运行?
-    // for thread safe
+    // here capture tcpserver by this pointer is ok, cause tcpserver must be alive when removeConnection_ is called
+    // otherwise, removeConnection will not be called in conn->closeCallback_
     base_loop_->runTask([this, conn]() {
         this->removeConnectionInOwnerThread_(conn);
     });

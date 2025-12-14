@@ -71,7 +71,7 @@ InetAddress::InetAddress(uint16_t port, bool loopback_only, bool ipv6)
         };
         addr.sin_family      = AF_INET;
         auto ip         = loopback_only ? kInaddrLoopback : kInaddrAny;
-        addr.sin_addr.s_addr = Sock::HostToNetwork32(ip);
+        addr.sin_addr.s_addr = Sock::hostToNetwork32(ip);
         addr.sin_port        = Sock::HostToNetwork16(port);
         addr_                = addr;
     }
@@ -171,7 +171,7 @@ auto InetAddress::GetLocalInetAddress(int sockfd)
 {
 
     // 通过sockfd获取其绑定的本机的ip地址和端口信息
-    auto localaddr = Sock::GetLocalAddr(sockfd);
+    auto localaddr = Sock::getLocalAddr(sockfd);
     return InetAddress {Sock::sockaddrCast<sockaddr>(&localaddr)};
 }
 
@@ -179,6 +179,6 @@ auto InetAddress::GetPeerInetAddress(int sockfd)
     -> InetAddress
 {
     // 通过sockfd获取其绑定的本机的ip地址和端口信息
-    auto localaddr = Sock::GetLocalAddr(sockfd);
+    auto localaddr = Sock::getLocalAddr(sockfd);
     return InetAddress {Sock::sockaddrCast<sockaddr>(&localaddr)};
 }

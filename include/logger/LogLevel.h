@@ -3,10 +3,18 @@
 #include <string_view>
 
 enum class LogLevel {
+    /// 系统错误
+    SYSFATAL = 9,
+    /// 系统错误
+    SYSERR = 8,
+    /// 致命错误
+    FATAL = 7,
     /// 错误
-    ERROR = 5,
+    ERROR = 6,
     /// 警告
-    WARN = 4,
+    WARN = 5,
+    /// 追踪
+    TRACE = 4,
     /// 一般信息
     INFO = 3,
     /// 调试信息

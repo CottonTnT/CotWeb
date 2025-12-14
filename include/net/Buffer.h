@@ -149,7 +149,7 @@ public:
         }
         else if constexpr (sizeof(Integer) == 4)
         {
-            auto be32 = Sock::HostToNetwork32(static_cast<uint32_t>(x));
+            auto be32 = Sock::hostToNetwork32(static_cast<uint32_t>(x));
             append(&be32, sizeof be32);
         }
         else if constexpr (sizeof(Integer) == 2)
@@ -222,7 +222,7 @@ public:
     ///
     void PrependInt32(int32_t x)
     {
-        int32_t be32 = Sock::HostToNetwork32(x);
+        int32_t be32 = Sock::hostToNetwork32(x);
         Prepend(&be32, sizeof be32);
     }
 

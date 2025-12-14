@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <system_error>
 #include <unistd.h>
+#include <latch>
 
 #include "net/Acceptor.h"
 #include "net/EventLoop.h"
@@ -32,8 +33,15 @@ Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusepor
 
 Acceptor::~Acceptor()
 {
-    listen_channel_.unregisterAllEvent(); // 把从Poller中感兴趣的事件删除掉
-    listen_channel_.remove(); // 调用EventLoop->removeChannel => Poller->removeChannel 把Poller的ChannelMap对应的部分删除
+
+    // 确保 acceptor里的channel 已取消
+    auto latch = std::latch {1};
+    owner_loop_->runTask([&latch, this]() {
+        this->cleanChannelInOnwerLoop_();
+        latch.count_down();
+    });
+    latch.wait();
+    close(idle_fd_);
 }
 
 void Acceptor::listenInOwnerThread()
@@ -122,4 +130,13 @@ void Acceptor::socketChannelReadCB_()
     // 然后对这个新连接 ::close(fd)（相当于告诉客户端：连接被拒绝）。
     // 最后重新打开 /dev/null 填回 idleFd_，继续待命
     // }
+}
+
+void Acceptor::cleanChannelInOnwerLoop_()
+{
+    // 确保当前在 I/O 线程
+    owner_loop_->assertInOwnerThread(); 
+    // 安全地从 I/O 集合中注销
+    listen_channel_.unregisterAllEvent(); 
+    listen_channel_.remove();     
 }
