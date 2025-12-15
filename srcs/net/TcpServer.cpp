@@ -2,7 +2,6 @@
 #include <memory>
 
 #include "net/TcpServer.h"
-#include "logger/LogLevel.h"
 #include "net/Callbacks.h"
 #include "net/TcpConnection.h"
 #include "logger/Logger.h"
@@ -53,26 +52,11 @@ TcpServer::~TcpServer()
         // 把原始的智能指针复位 让栈空间的TcpConnectionPtr conn指向该对象 当conn出了其作用域 即可释放智能指针指向的对象
         // 销毁连接
         item.second.reset();
-        conn->getLoop()->runTask([conn] {
-            // 这里只是确保连接的销毁操作在其所属的IO线程中执行
-            // 原有的muduo里面是调用的conn->connectDestroyed();
-            // void TcpConnection::connectDestroyed()
-            // {
-            //   loop_->assertInLoopThread();
-            //   if (state_ == kConnected)
-            //   {
-            //     setState(kDisconnected);
-            //     channel_->disableAll();
-
-            //     connectionCallback_(shared_from_this());
-            //   }
-            //   channel_->remove();
-            // }
-            // 但是我这里这里进行了改造，因为原有的在connectDestroyed中去执行
-            // 如上操作是有问题的，因为 tcpconnection 调用closeCallback_ 可能会导致 TcpServer::removeConnectionInLoop，而此时tcpsever 已经销毁
-            // 所以直接默认tcpserver 和 baseloop_ 所在相同的线程，并且其生命周期长于其
-            // baseloop_;
-            conn->destroyConnection_();
+        conn->getLoop()->runTask([guard_conn = conn] {
+            if (guard_conn->state_ != TcpConnection::Disconnected)
+            {
+                guard_conn->socketChannelCloseCB_();
+            }
         });
     }
 }
@@ -118,8 +102,8 @@ void TcpServer::initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAdd
     ++next_conn_id_;
     auto new_conn_name = name_ + buf.data();
 
-    // LOG_INFO("TcpServer::newConnection [%s] - new connection [%s] from %s\n",
-    //  name_.c_str(), connName.c_str(), peerAddr.ToIpPort().c_str());
+    LOG_INFO_FMT(log,"TcpServer::newConnection [{}] - new connection [{}] from {}",
+     name_, new_conn_name, peerAddr.toIpPortRepr());
 
     // 2.2 通过sockfd获取其绑定的本机的ip地址和端口信息
     auto local_addr = InetAddress::GetLocalInetAddress(sockfd);
@@ -175,11 +159,9 @@ void TcpServer::removeConnectionInOwnerThread_(const TcpConnectionPtr& conn)
 {
     base_loop_->assertInOwnerThread();
 
-    // todo: log
-    //  LOG_INFO("TcpServer::removeConnectionInLoop [%s] - connection %s\n",
-    //           name_.c_str(), conn->GetName().c_str());
+    LOG_INFO_FMT(log, "TcpServer::removeConnectionInLoop [{}] - connection {}", name_, conn->getName());
     connections_.erase(conn->getName());
     auto* io_loop = conn->getLoop();
     // make sure tcpconn destruct in owner loop thread, 单一职责，线程安全
-    io_loop->queueTask([tcpconn = conn] { tcpconn->destroyConnection_(); });
+    io_loop->queueTask([tcpconn = conn] { tcpconn->destructConnectionInOnwerLoop_(); });
 }

@@ -93,7 +93,7 @@ private:
     void postConnectionCreate_();
     // called when TcpServer has removed me from its map
     // make sure the connection destruct in onwer loop thread
-    void destroyConnection_(); // should be called only once
+    void destructConnectionInOnwerLoop_(); // should be called only once
     void socketChannelCloseCB_();
 
 public:

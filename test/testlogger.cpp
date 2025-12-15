@@ -2,9 +2,14 @@
 #include "logger/AsyncLogger.h"
 #include "logger/LogAppender.h"
 #include "logger/Logger.h"
+#include "logger/LoggerManager.h"
 #include <print>
 #include <random>
+#include <map>
+#include "net/Channel.h"
+#include <unordered_map>
 
+static auto logger = GET_ROOT_LOGGER();
 /**
  * @brief 生成一个指定范围 [min, max] 内的随机整数。
  * * @param min 范围最小值（包含）。
@@ -34,19 +39,18 @@ int generate_random_int(int min, int max) {
 auto main()
     -> int
 {
+
+    auto map = std::unordered_map<int, Channel*>{};
+    LOG_INFO_FMT(logger,"fd total count:{}", map.size());
+
     int lower_bound = 1;
     int upper_bound = 10000;
     auto logger = std::make_shared<Logger>();
     logger->addAppender(std::make_shared<AppenderProxy<RollingFileAppender>>("logfile.txt", 1_kb));
-    LogFMTLevel(*logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
-    LogFMTLevel(*logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
-    LogFMTLevel(*logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), 2, "hello");
-
+    LOG_DEBUG_FMT(logger, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
     auto async_logger = std::make_shared<AsyncLogger>();
     async_logger->addAppender(std::make_shared<AppenderProxy<RollingFileAppender>>("async_logfile.txt", 1_kb));
 
-    LogFMTLevel(*async_logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
-    LogFMTLevel(*async_logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
-    LogFMTLevel(*async_logger, LogLevel::DEBUG, "test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), 2, "hello");
+    LOG_DEBUG_FMT(async_logger,"test log fmt level: {}, {}, {}", generate_random_int(lower_bound,  upper_bound), generate_random_int(lower_bound,  upper_bound), "hello");
     return 0;
 }

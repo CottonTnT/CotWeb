@@ -8,7 +8,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "logger/LogLevel.h"
 #include "net/Buffer.h"
 #include "net/Channel.h"
 #include "net/Socket.h"
@@ -280,7 +279,7 @@ void TcpConnection::postConnectionCreate_()
     connection_callback_(shared_from_this());
 }
 
-void TcpConnection::destroyConnection_()
+void TcpConnection::destructConnectionInOnwerLoop_()
 {
     owner_loop_->assertInOwnerThread();
 }
@@ -295,6 +294,8 @@ void TcpConnection::forceClose()
         owner_loop_->queueTask([tcpconn = shared_from_this()] { tcpconn->forceCloseInOwnerLoop_(); });
     }
 }
+
+
 
 void TcpConnection::forceCloseWithDelay(double seconds)
 {
@@ -426,21 +427,18 @@ void TcpConnection::socketChannelWriteCB_()
         }
         else
         {
-            // todo: log
-            //  LOG_ERROR("TcpConnection::handleWrite");
+             LOG_ERROR_FMT(log, "TcpConnection::handleWrite");
         }
     }
     else
     {
-        // todo:log
-        //  LOG_ERROR("TcpConnection fd=%d is down, no more writing", channel_->GetFd());
+         LOG_ERROR_FMT(log,"TcpConnection fd=%d is down, no more writing", socket_channel_->getFd());
     }
 }
 
 void TcpConnection::socketChannelCloseCB_()
 {
-    // todo:log
-    //  LOG_INFO("TcpConnection::handleClose fd=%d state=%d\n", channel_->GetFd(), (int)state_);
+     LOG_INFO_FMT(log, "TcpConnection::handleClose fd=%d state=%d", socket_channel_->getFd(), (int)state_);
     owner_loop_->assertInOwnerThread();
     assert(state_ == Disconnecting or state_ == Connected);
     // we don't close fd, leave it to dtor, so we can find leaks easily.
@@ -467,6 +465,5 @@ void TcpConnection::socketChannelErrorCB_()
     {
         err = optval;
     }
-    // todo: log
-    //  LOG_ERROR("TcpConnection::handleError name:%s - SO_ERROR:%d\n", name_.c_str(), err);
+     LOG_ERROR_FMT(log,"TcpConnection::handleError name:{} - SO_ERROR:{}\n", name_, err);
 }

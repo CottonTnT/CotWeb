@@ -85,12 +85,12 @@ EventLoop::EventLoop()
     , wakeup_fd_ {createEventfd()}
     , wakeup_channel_ {new Channel {this, wakeup_fd_}}
 {
-    LOG_DEBUG_FMT(log, "EventLoop created {} in thread {}\n", std::bit_cast<uint64_t>(this), owner_tid_);
+    LOG_DEBUG_FMT(log, "EventLoop created {} in thread {}", std::bit_cast<uint64_t>(this), owner_tid_);
     // only one loop per thread
     if (t_event_loop != nullptr)
     {
         // todo log and exit
-        LOG_FATAL_FMT(log, "Another EventLoop %p exists in this thread %d\n", std::bit_cast<uint64_t>(t_event_loop), owner_tid_);
+        LOG_FATAL_FMT(log, "Another EventLoop %p exists in this thread %d", std::bit_cast<uint64_t>(t_event_loop), owner_tid_);
     }
     else
         t_event_loop = this;
@@ -136,7 +136,7 @@ void EventLoop::loop(std::error_code& ec)
         ec = EventLoopErrcCode::NotInOwnerLoop;
         return;
     }
-    LOG_INFO_FMT(log,"EventLoop {} start looping\n", std::bit_cast<uint64_t>(this));
+    LOG_INFO_FMT(log,"EventLoop {} start looping", std::bit_cast<uint64_t>(this));
     while (not quit_.load())
     {
         active_channels_.clear();

@@ -5,8 +5,11 @@
 #include <unistd.h>
 
 #include "net/Epoller.h"
-// #include "Logger.h"
 #include "net/Channel.h"
+#include "logger/Logger.h"
+#include "logger/LoggerManager.h"
+
+auto log = GET_ROOT_LOGGER();
 
 
 EPollPoller::EPollPoller(EventLoop* loop)
@@ -29,7 +32,7 @@ auto EPollPoller::poll(int timeoutMs, ChannelList& activeChannels)
     -> Timestamp
 {
     // 由于频繁调用poll 实际上应该用LOG_DEBUG输出日志更为合理 当遇到并发场景 关闭DEBUG日志提升效率
-    // LOG_INFO("func=%s => fd total count:%lu\n", __FUNCTION__, channels_.size());
+    LOG_INFO_FMT(log,"fd total count:{}", channels_.size());
     auto num_events = ::epoll_wait(epollfd_, events_.data(), static_cast<int>(events_.size()), timeoutMs);
 
     auto save_errno = errno;
@@ -38,8 +41,7 @@ auto EPollPoller::poll(int timeoutMs, ChannelList& activeChannels)
 
     if (num_events > 0)
     {
-        // todo:log
-        //  LOG_INFO("%d events happend\n", numEvents); // LOG_DEBUG最合理
+        LOG_INFO_FMT(log,"{} events happend", num_events); // LOG_DEBUG最合理
         //  转就绪事件为 activeChannels
         fillActiveChannels_(num_events, activeChannels);
         if (num_events == events_.size()) // 扩容操作
@@ -49,16 +51,14 @@ auto EPollPoller::poll(int timeoutMs, ChannelList& activeChannels)
     }
     else if (num_events == 0)
     {
-        // todo:log
-        //  LOG_DEBUG("%s timeout!\n", __FUNCTION__);
+         LOG_DEBUG_FMT(log, "timeout!");
     }
     else
     {
         if (save_errno != EINTR)
         {
             errno = save_errno;
-            // LOG_ERROR("EPollPoller::poll() error!");
-            // todo:log
+            LOG_ERROR_FMT(log, "EPollPoller::poll() error!");
         }
     }
     return now;
@@ -69,7 +69,7 @@ void EPollPoller::updateChannel(Channel* channel)
 {
     assertInOwnerThread_();
     auto index = channel->getState();
-    // LOG_INFO("func=%s => fd=%d events=%d index=%d\n", __FUNCTION__, channel->fd(), channel->events(), index);
+    LOG_INFO_FMT(log, "fd={} events={} state={}",  channel->getFd(), channel->getRegisteredEvents(), static_cast<int>(index));
 
     auto fd = channel->getFd();
     switch (index)
@@ -115,7 +115,7 @@ void EPollPoller::removeChannel(Channel* channel)
     assert(channels_[fd] == channel);
     // thd fd of channel must not be interested in any events before channel removed from Epoller
     assert(channel->isNoneEvent());
-    // LOG_INFO("func=%s => fd=%d\n", __FUNCTION__, fd);
+    LOG_INFO_FMT(log, "fd={}", fd);
     auto state = channel->getState();
     assert(state == Channel::State::Listening or  state == Channel::State::NoEventRegistered);
 
@@ -161,8 +161,7 @@ void EPollPoller::update_(int operation, Channel* channel)
     {
         if (operation == EPOLL_CTL_DEL)
         {
-            //
-            // LOG_ERROR("epoll_ctl del error:%d\n", errno);
+            LOG_ERROR_FMT(log, "epoll_ctl del error:{}\n", errno);
         }
         else
         {

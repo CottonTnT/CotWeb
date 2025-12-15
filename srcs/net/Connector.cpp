@@ -9,7 +9,6 @@
 
 #include "net/Connector.h"
 
-#include "logger/LogLevel.h"
 #include "net/Channel.h"
 #include "net/EventLoop.h"
 #include "net/Socketsops.h"
@@ -47,9 +46,9 @@ Connector::~Connector()
 
 void Connector::start()
 {
-    // is_connect_canceled = false;
+    is_connect_canceled_ = false;
     // 线程的安全性由其所属的 tcpclient 保证
-    loop_->runTask([this, weakOwner= onwner_] {
+    loop_->runTask([this, weakOwner = onwner_] {
         if (weakOwner.lock())
         {
             this->startInLoop_();
@@ -156,7 +155,7 @@ void Connector::restart()
 {
     loop_->assertInOwnerThread();
     setState_(Disconnected);
-    retry_delay_ms_     = c_init_retry_delay_ms;
+    retry_delay_ms_      = c_init_retry_delay_ms;
     is_connect_canceled_ = true;
     startInLoop_();
 }
