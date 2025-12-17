@@ -37,7 +37,7 @@ auto EPollPoller::poll(int timeoutMs, ChannelList& activeChannels)
 
     auto save_errno = errno;
 
-    auto now = Timestamp::Now();
+    auto now = Timestamp::now();
 
     if (num_events > 0)
     {

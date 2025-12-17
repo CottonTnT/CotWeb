@@ -1,4 +1,5 @@
 #pragma once
+#include "common/alias.h"
 #include "net/Callbacks.h"
 #include "net/TcpServer.h"
 
@@ -19,5 +20,5 @@ class DiscardServer
                  Buffer& buf,
                  Timestamp time);
 
-  TcpServer server_;
+  Sptr<TcpServer> server_;
 };

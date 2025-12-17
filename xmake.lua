@@ -7,6 +7,7 @@ set_languages("c++23")
 add_rules("plugin.compile_commands.autoupdate", {outputdir = "build"})
 -- add_rules("mode.debug", "mode.release")
 set_policy("build.warning", true)
+set_policy("build.c++.modules", false)
 set_warnings("all")
 -- 添加包含路径
 
@@ -89,6 +90,46 @@ target("TimeClient")
     add_includedirs("include", "/usr/local/include", "examples/simple/time/client")
     add_files("examples/simple/time/client/*.cpp")
     add_syslinks("pthread")
+
+target("EchoServer")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs("include", "/usr/local/include", "examples/simple/echo")
+    add_files("examples/simple/echo/*.cpp")
+    add_syslinks("pthread")
+
+
+target("ChargenServer")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs("include", "/usr/local/include", "examples/simple/chargen")
+    add_files("examples/simple/chargen/*.cpp")
+    add_syslinks("pthread")
+
+target("AllInOne")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs("include", "/usr/local/include", "examples/simple")
+    add_files(
+        "examples/simple/**/*.cpp", 
+        "examples/simple/allinone/allinone.cc"
+    )
+    remove_files(
+        "examples/simple/**/main.cpp"
+    )
+    add_syslinks("pthread")
+
+
+target("DownloadFile")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs("include", "/usr/local/include", "examples/filetransfer")
+    add_files(
+        "examples/filetransfer/*.cpp" 
+    )
+    add_syslinks("pthread")
+
+
 
 target("testlogger")
     set_kind("binary")

@@ -170,7 +170,7 @@ public:
     void shutdown();
     void forceClose();
     void forceCloseWithDelay(double seconds);
-    void SetTcpNoDelay(bool on);
+    void setTcpNoDelay(bool on);
     // reading or not
 
     void startRead();

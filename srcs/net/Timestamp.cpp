@@ -18,7 +18,7 @@ Timestamp::Timestamp(uint64_t microSecondsSinceEpoch)
 {
 }
 
-auto Timestamp::Now()
+auto Timestamp::now()
     -> Timestamp
 {
     struct timeval tv;

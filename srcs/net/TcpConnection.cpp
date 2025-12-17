@@ -67,7 +67,7 @@ TcpConnection::TcpConnection(EventLoop* loop,
     // 注册读写等事件的回调
     // 这里直接捕获 this 是因为其生命周期要长于socket_channel for it`s TcpConnection`s member
     socket_channel_->setReadCallback([this](Timestamp) {
-        this->socketChannelReadCB_(Timestamp::Now());
+        this->socketChannelReadCB_(Timestamp::now());
     });
 
     socket_channel_->setWriteCallback([this]() {
@@ -198,11 +198,10 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
             if (remaining == 0 && write_complete_callback_) // 全部发送完毕
             {
                 // 既然在这里数据全部发送完成，就不用再给channel设置epollout事件了
-                auto write_complete_task = [tcpconn = shared_from_this()]() {
+                owner_loop_->queueTask([tcpconn = shared_from_this()]() {
                     // here the "tcp->write..." make tcpconn will be valid in write_complete_callback_ unless the write_complete_callback_ will delete the tcpconn stupidly
                     tcpconn->write_complete_callback_(tcpconn);
-                };
-                owner_loop_->queueTask(write_complete_task);
+                });
             }
         }
         else // nwrote < 0, 错误处理
@@ -229,14 +228,16 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
     if (not fault_error && remaining > 0)
     {
         // 目前发送缓冲区剩余的待发送的数据的长度
-        auto old_len = output_buf_.getReadableBytesCount();
-        if (old_len + remaining >= high_watermark_ && old_len < high_watermark_ && high_watermark_callback_) // 待发送数据超过了高水位
+        auto in_obuf = output_buf_.getReadableBytesCount();
+        // 第二个条件用于判断，第二次send时再次达到highWaterMark
+        // 同时保证一次send只能触发一次highWaterMark
+        if (in_obuf + remaining >= high_watermark_
+            and in_obuf < high_watermark_
+            and high_watermark_callback_) // 待发送数据超过了高水位
         {
-            auto high_watermark_task = [tcpconn = shared_from_this(), watermark_now = old_len + remaining]()
-                -> void {
+            owner_loop_->queueTask([tcpconn = shared_from_this(), watermark_now = in_obuf + remaining](){
                 tcpconn->high_watermark_callback_(tcpconn, watermark_now);
-            };
-            owner_loop_->queueTask(high_watermark_task);
+            });
         }
 
         output_buf_.append((char*)data + nwrote, remaining);
@@ -337,7 +338,7 @@ auto TcpConnection::stateToString_() const
     }
 }
 
-void TcpConnection::SetTcpNoDelay(bool on)
+void TcpConnection::setTcpNoDelay(bool on)
 {
     socket_->SetTcpNoDelay(on);
 }

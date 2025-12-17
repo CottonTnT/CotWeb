@@ -1,25 +1,26 @@
 #include "DiscardServer.h"
+#include "net/TcpServer.h"
 #include "net/Timestamp.h"
 #include <print>
 
 DiscardServer::DiscardServer(EventLoop* loop,
                              const InetAddress& listenAddr)
-    : server_(loop, listenAddr, "DiscardServer")
+    : server_{ new TcpServer{loop, listenAddr, "DiscardServer"} }
 {
-    server_.setConnectionEstablishedCallback([this](const auto& tcpconn) {
+    server_->setConnectionEstablishedCallback([this](const auto& tcpconn) {
         this->onConnectionEstablished(tcpconn);
     });
-    server_.setConnectionCloseCallback([this](const auto& tcpconn) {
+    server_->setConnectionCloseCallback([this](const auto& tcpconn) {
         this->onConnectionClose(tcpconn);
     });
-    server_.setMessageCallback(
+    server_->setMessageCallback(
         [this](auto& tcpconn, auto& buf, auto timestamp) { onMessage(tcpconn, buf, timestamp); });
-    server_.setThreadNum(2);
+    server_->setThreadNum(2);
 }
 
 void DiscardServer::start()
 {
-    server_.start();
+    server_->start();
 }
 
 void DiscardServer::onConnectionEstablished(const TcpConnectionPtr& conn)

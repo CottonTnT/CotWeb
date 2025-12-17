@@ -264,14 +264,14 @@ auto EventLoop::runAt(Timestamp time, TimerCallback cb)
 auto EventLoop::runAfter(double delay, TimerCallback cb)
     -> Timer::Id
 {
-    Timestamp time(addTime(Timestamp::Now(), delay));
+    Timestamp time(addTime(Timestamp::now(), delay));
     return runAt(time, std::move(cb));
 }
 
 auto EventLoop::runEvery(double interval, TimerCallback cb)
     -> Timer::Id
 {
-    Timestamp time(addTime(Timestamp::Now(), interval));
+    Timestamp time(addTime(Timestamp::now(), interval));
     return timer_queue_->addTimer(std::move(cb), time, interval);
 }
 

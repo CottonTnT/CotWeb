@@ -2,23 +2,23 @@
 
 DaytimeServer::DaytimeServer(EventLoop* loop,
                              const InetAddress& listenAddr)
-  : server_(loop, listenAddr, "DaytimeServer")
+  : server_(new TcpServer{loop, listenAddr, "DaytimeServer"})
 {
-    server_.setConnectionEstablishedCallback([this](const auto& conn) {
+    server_->setConnectionEstablishedCallback([this](const auto& conn) {
         this->onConnection(conn);
     });
 
-    server_.setConnectionCloseCallback([this](const auto& conn) {
+    server_->setConnectionCloseCallback([this](const auto& conn) {
         this->onConnection(conn);
     });
-    server_.setMessageCallback([this](const auto& conn, auto& buf, auto timestamp) {
+    server_->setMessageCallback([this](const auto& conn, auto& buf, auto timestamp) {
         this->onMessage(conn, buf, timestamp);
     });
 }
 
 void DaytimeServer::start()
 {
-  server_.start();
+  server_->start();
 }
 
 void DaytimeServer::onConnection(const TcpConnectionPtr& conn)
@@ -27,7 +27,7 @@ void DaytimeServer::onConnection(const TcpConnectionPtr& conn)
     if (conn->isConnected())
     {
         std::println("DaytimeServer - {}->{} is UP", conn->getPeerAddress().toIpPortRepr(), conn->getLocalAddress().toIpPortRepr());
-        conn->send(Timestamp::Now().toFormattedString() + "\n");
+        conn->send(Timestamp::now().toFormattedString() + "\n");
         conn->shutdown();
     }
     else if (conn->isDisconnected())

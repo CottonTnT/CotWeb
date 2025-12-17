@@ -67,21 +67,21 @@ private:
     }
 };
 
-auto main(int argc, char* argv[])
-    -> int
-{
-    LOG_INFO_FMT(log, "pid = {}", getpid());
-    if (argc > 1)
-    {
-        EventLoop loop;
-        InetAddress serverAddr(argv[1], 2037);
+// auto main(int argc, char* argv[])
+//     -> int
+// {
+//     LOG_INFO_FMT(log, "pid = {}", getpid());
+//     if (argc > 1)
+//     {
+//         EventLoop loop;
+//         InetAddress serverAddr(argv[1], 2037);
 
-        TimeClient timeClient(&loop, serverAddr);
-        timeClient.connect();
-        loop.loop();
-    }
-    else
-    {
-        printf("Usage: %s host_ip\n", argv[0]);
-    }
-}
+//         TimeClient timeClient(&loop, serverAddr);
+//         timeClient.connect();
+//         loop.loop();
+//     }
+//     else
+//     {
+//         printf("Usage: %s host_ip\n", argv[0]);
+//     }
+// }

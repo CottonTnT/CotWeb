@@ -13,7 +13,7 @@ public:
     Timestamp();
     explicit Timestamp(uint64_t microSecondsSinceEpoch);
 
-    static auto Now()
+    static auto now()
         -> Timestamp;
 
     /**
@@ -83,7 +83,7 @@ inline auto operator==(Timestamp lhs, Timestamp rhs)
 /// @return (high-low) in seconds
 /// @c double has 52-bit precision, enough for one-microsecond
 /// resolution for next 100 years.
-inline auto TimeDifference(Timestamp high, Timestamp low)
+inline auto timeDifference(Timestamp high, Timestamp low)
     -> double
 {
   auto diff = high.microSecondsSinceEpoch() - low.microSecondsSinceEpoch();

@@ -34,7 +34,7 @@ auto howMuchTimeFromNow(Timestamp when)
     -> struct timespec
 {
     auto microseconds = when.microSecondsSinceEpoch()
-                        - Timestamp::Now().microSecondsSinceEpoch();
+                        - Timestamp::now().microSecondsSinceEpoch();
     // 最小超时设为 100 微秒，避免过于频繁或立即触发
     microseconds = microseconds < 100 ? 100 : microseconds;
     struct timespec ts;
@@ -173,7 +173,7 @@ void TimerQueue::timerChannelReadCB_()
 {
     owner_loop_->assertInOwnerThread();
 
-    auto now = Timestamp::Now();
+    auto now = Timestamp::now();
 
     // 1. 读取 timerfd，清空事件，避免重复触发
     readTimerfd(timerfd_, now);

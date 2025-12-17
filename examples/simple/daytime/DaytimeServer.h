@@ -2,6 +2,7 @@
 #define MUDUO_EXAMPLES_SIMPLE_DAYTIME_DAYTIME_H
 
 #include "net/TcpServer.h"
+#include <memory>
 
 // RFC 867
 class DaytimeServer
@@ -20,7 +21,7 @@ class DaytimeServer
                  Buffer& buf,
                  Timestamp time);
 
-  TcpServer server_;
+  std::shared_ptr<TcpServer> server_;
 };
 
 #endif  // MUDUO_EXAMPLES_SIMPLE_DAYTIME_DAYTIME_H
