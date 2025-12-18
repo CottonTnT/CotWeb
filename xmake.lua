@@ -106,6 +106,17 @@ target("ChargenServer")
     add_files("examples/simple/chargen/*.cpp")
     add_syslinks("pthread")
 
+target("SignalHandler")
+    set_kind("binary")
+    add_deps("muduo-net", "common-lib", "logger")
+    add_includedirs(
+        "include", 
+        "/usr/local/include", 
+        "examples/simple/signalhandler"
+    )
+    add_files("examples/simple/signalhandler/*.cpp")
+    add_syslinks("pthread")
+
 target("AllInOne")
     set_kind("binary")
     add_deps("muduo-net", "common-lib", "logger")

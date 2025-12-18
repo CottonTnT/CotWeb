@@ -179,8 +179,7 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
     // 之前调用过该connection的shutdown 不能再进行发送了
     if (state_ == Disconnected)
     {
-        // todo:log
-        // LOG_WARN("disconnected, give up writing");
+        LOG_WARN_FMT(log, "disconnected, give up writing");
         return;
     }
 
