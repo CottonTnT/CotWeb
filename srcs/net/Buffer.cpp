@@ -9,7 +9,7 @@
 std::string Buffer::c_CRLF = "\r\n";
 
 Buffer::Buffer(Buffer&& rhs) noexcept
-    : buffer_(std::move(rhs.buffer_))
+    : buffer_{ std::move(rhs.buffer_) }
     , reader_idx_ {std::exchange(rhs.reader_idx_, kCheapPrepend)}
     , writer_idx_ {std::exchange(rhs.writer_idx_, kCheapPrepend)}
 {

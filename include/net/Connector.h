@@ -15,7 +15,6 @@
 #include "InetAddress.h"
 #include "net/TcpClient.h"
 
-#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -27,11 +26,12 @@ class EventLoop;
  * @brief only reponsible for socket connection establishment, not for tcpconnection
  */
 class Connector {
+friend Channel;
 public:
     using NewConnectionCallback = std::function<void(int sockFd)>;
 
 private:
-    enum States { Disconnected,
+    enum States { Disconnected = 0,
                   Connecting, // 已开始连接，在这里Socket connect是非阻塞的
                   Connected };// tcpconnection
     static inline constexpr int c_max_retry_delay_ms  = 30 * 1000;
@@ -39,21 +39,20 @@ private:
 
     EventLoop* const loop_;
     InetAddress peer_addr_;
-    std::weak_ptr<TcpClient> onwner_;
-    std::atomic<bool> is_connect_canceled_; // atomic, 表示 Connector 是否保持连接, 即是否在尝试连接或重试或已连接
-    std::atomic<States> state_;            // FIXME: use atomic variable
+    States state_;            // FIXME: use atomic variable ? no! we keep all the state_ transfer in loop thread_
     std::unique_ptr<Channel> channel_;
     NewConnectionCallback new_connection_callback_;
+    int sock_fd_; // 连接成功时，打开的sockfd
     int retry_delay_ms_;
     Timer::Id retry_timer_id_;
 
     void setState_(States s) { state_ = s; }
     /**
-     * @brief 在 loop 线程里真正发起 connect
+     * @brief 在 loop 线程里真正发起 connect, best effort
      */
     void startInLoop_();
     /**
-     * @brief 请求取消当前连接流程
+     * @brief 取消当前连接流程, i.e. 取消建立连接
      */
     void stopInLoop_();
 
@@ -64,27 +63,31 @@ private:
     /**
      * @brief socket 连接建立后，初始化 tcpconnection
      */
-    void postSocketConnected_(int sockfd);
-    void channelWriteCB_();
-    void channelErrorCB_();
+    void initConnectChannel_(int sockfd);
+    void handleWrite_();
+    void handleError_();
+
     /**
      * @brief 关闭旧的sockfd并且重试
      */
-    void retry_(int sockfd);
+    void retry_(bool delayResetChannel);
 
-    auto removeAndResetChannel_() -> int;
-    /**
-     * @brief 释放 Channel
-     */
-    void resetChannel_();
+    auto removeAndResetChannel_(bool delayReset)->void;
 
+    void resetSockFd_();
+
+    void cancelReryTimer_();
+
+    void restartInLoop_();
+
+    void resetConnector_(bool delayResetChannel);
 public:
     Connector(const Connector&)                    = delete;
     Connector(Connector&&)                         = delete;
     auto operator=(const Connector&) -> Connector& = delete;
     auto operator=(Connector&&) -> Connector&      = delete;
 
-    Connector(EventLoop* loop, const InetAddress& peerAddr, std::weak_ptr<TcpClient> owner_);
+    Connector(EventLoop* loop, const InetAddress& peerAddr);
     /**
      * @brief must call stop before ~Connector
      */
@@ -100,9 +103,6 @@ public:
      */
     void start();
 
-    /**
-     * @brief must be called in loop thread,重置状态并重新开始
-     */
     void restart();
 
     /**

@@ -12,104 +12,112 @@
 #include "net/Channel.h"
 #include "net/EventLoop.h"
 #include "net/Socketsops.h"
-#include "logger/Logger.h"
-#include "logger/LoggerManager.h"
 #include "net/TcpClient.h"
+#include "logger/EasyLog.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
 
 #include <memory>
-#include <utility>
+#include <latch>
+#include <sys/stat.h>
 
-static auto log = GET_ROOT_LOGGER();
-
-Connector::Connector(EventLoop* loop, const InetAddress& peerAddr, std::weak_ptr<TcpClient> owner)
+Connector::Connector(EventLoop* loop, const InetAddress& peerAddr)
     : loop_ {loop}
     , peer_addr_ {peerAddr}
-    , onwner_ {std::move(owner)}
-    , is_connect_canceled_ {true}
     , state_ {Disconnected}
+    , channel_ {nullptr}
+    , sock_fd_ {-1}
     , retry_delay_ms_ {c_init_retry_delay_ms}
     , retry_timer_id_ {0}
 // 数据成员中其实是有Channel对象的,但却并没有初始化,因为在连接成功的时候才能有一个有效的fd,那时才可以创建一个有效的Channel
 {
-    LOG_DEBUG_FMT(log, "ctor[{}]", std::bit_cast<uint64_t>(this));
+    EASY_DEBUG("ctor[{}]", std::bit_cast<uint64_t>(this));
 }
 
 Connector::~Connector()
 {
-    LOG_DEBUG_FMT(log, "dtor[{}]", std::bit_cast<uint64_t>(this));
-    assert(channel_ == nullptr);
+    EASY_DEBUG("dtor[{}]", std::bit_cast<uint64_t>(this));
+    auto latch = std::latch {1};
+    loop_->runInLoop([this, &latch]() {
+        loop_->assertInOwnerThread();
+        if (channel_)
+        {
+            stopInLoop_();
+        }
+        latch.count_down();
+    });
+    latch.wait();
 }
 
 void Connector::start()
 {
-    is_connect_canceled_ = false;
-    // 线程的安全性由其所属的 tcpclient 保证
-    loop_->runTask([this, weakOwner = onwner_] {
-        if (weakOwner.lock())
-        {
-            this->startInLoop_();
-        }
+    TRACE();
+    loop_->runInLoop([this] {
+        this->startInLoop_();
     });
 }
 
 void Connector::startInLoop_()
 {
+    TRACE();
     loop_->assertInOwnerThread();
-    assert(state_ == Disconnected);
-
-    // connectPeer_();
-    if (not is_connect_canceled_)
+    if (state_ == Disconnected)
     {
         connectPeer_();
     }
-    else
+    else if (state_ == Connecting or state_ == Connected) // 幂等
     {
-        LOG_DEBUG_FMT(log, "do not connect");
+        EASY_WARN("Connector: do not start again-{}", static_cast<int>(state_));
     }
 }
 
 void Connector::stop()
 {
-    is_connect_canceled_ = true;
-    {
-        loop_->queueTask([this, weakOwner = onwner_] {
-            if (auto owner = weakOwner.lock(); owner != nullptr)
-            {
-                this->stopInLoop_();
-            }
-        });
-    }
+    TRACE();
+    loop_->queueInLoop([this] {
+        this->stopInLoop_();
+    });
 }
-
-void Connector::stopInLoop_()
+void Connector::cancelReryTimer_()
 {
+    TRACE();
     loop_->assertInOwnerThread();
-
     if (retry_timer_id_ != 0)
     {
+        EASY_INFO("[Connector::cancelReryTimer_] : timerId = {}", retry_timer_id_);
         loop_->cancelTimer(retry_timer_id_);
         retry_timer_id_ = 0;
     }
-
+    else
+    {
+        EASY_WARN("[Connector::cancelReryTimer_] : timerId = {}", retry_timer_id_);
+    }
+}
+void Connector::stopInLoop_()
+{
+    TRACE();
+    loop_->assertInOwnerThread();
     if (state_ == Connecting) // 如果正在连接
     {
-        setState_(Disconnected);
-        auto sockfd = removeAndResetChannel_();
-
-        Sock::close(sockfd);
-        LOG_DEBUG_FMT(log, "stoping");
+        resetConnector_(false);
+        EASY_DEBUG("stop connect");
+    }
+    else
+    {
+        EASY_WARN("[Connector::stopInLoop_] : Connector state expect Connecting while {}", static_cast<int>(state_));
     }
 }
 
 void Connector::connectPeer_()
 {
-    auto sockfd = Sock::createNonblockingOrDie(peer_addr_.getFamily());
+    TRACE();
+    assert(state_ == Disconnected);
+    loop_->assertInOwnerThread();
+    sock_fd_ = Sock::createNonblockingOrDie(peer_addr_.getFamily());
     // 这里是非阻塞的
-    auto ret         = Sock::connect(sockfd, *peer_addr_.getSockAddr());
+    auto ret         = Sock::connect(sock_fd_, *peer_addr_.getSockAddr());
     auto saved_errno = (ret == 0) ? 0 : errno;
     switch (saved_errno)
     {
@@ -118,8 +126,8 @@ void Connector::connectPeer_()
         case EINPROGRESS:
         case EINTR:
         case EISCONN:
-            LOG_INFO_FMT(log, "SockConnect established in Connector:startInLoop [sockfd-{}]", sockfd);
-            postSocketConnected_(sockfd);
+            EASY_INFO("SockConnect established in Connector:startInLoop [sockfd-{}]", sock_fd_);
+            initConnectChannel_(sock_fd_);
             break;
 
         // 可重试的错误
@@ -128,7 +136,7 @@ void Connector::connectPeer_()
         case EADDRNOTAVAIL:
         case ECONNREFUSED:
         case ENETUNREACH:
-            retry_(sockfd);
+            retry_(false);
             break;
 
         // 程序/权限/参数错误
@@ -139,13 +147,13 @@ void Connector::connectPeer_()
         case EBADF:
         case EFAULT:
         case ENOTSOCK:
-            LOG_SYSERR_FMT(log, "connect error in Connector::startInLoop {} {}", saved_errno, strerror(saved_errno));
-            Sock::close(sockfd);
+            EASY_SYSERR("connect error in Connector::startInLoop {} {}", saved_errno, strerror(saved_errno));
+            resetSockFd_();
             break;
 
         default:
-            LOG_SYSERR_FMT(log, "Unexpected error in Connector::startInLoop {}", saved_errno);
-            Sock::close(sockfd);
+            EASY_SYSERR("Unexpected error in Connector::startInLoop {}", saved_errno);
+            resetSockFd_();
             // connectErrorCallback_();
             break;
     }
@@ -153,126 +161,140 @@ void Connector::connectPeer_()
 
 void Connector::restart()
 {
+    TRACE();
+    loop_->runInLoop([this]() {
+        this->restartInLoop_();
+    });
+}
+void Connector::restartInLoop_()
+{
+    TRACE();
     loop_->assertInOwnerThread();
-    setState_(Disconnected);
-    retry_delay_ms_      = c_init_retry_delay_ms;
-    is_connect_canceled_ = true;
+    if (state_ == Connecting)
+    {
+        stopInLoop_();
+    }
+    else if (state_ == Connected)
+    {
+        setState_(Disconnected);
+    }
     startInLoop_();
 }
 
-void Connector::postSocketConnected_(int sockfd)
+void Connector::initConnectChannel_(int sockfd)
 {
-    setState_(Connecting);
+    TRACE();
     assert(channel_ == nullptr);
+    assert(state_ == Disconnected);
+    setState_(Connecting);
     channel_ = std::make_unique<Channel>(loop_, sockfd);
-    channel_->setWriteCallback(
-        [this, weakOwner = onwner_] {
-            if (auto owner = weakOwner.lock(); owner != nullptr)
-            {
-
-                this->channelWriteCB_();
-            }
-        });
-    channel_->setErrorCallback(
-        [this, weakOwner = onwner_] {
-            if (auto owner = weakOwner.lock(); owner != nullptr)
-            {
-                this->channelErrorCB_();
-            }
-        });
-
-    // channel_->tie(shared_from_this());
+    channel_->setHandler(this);
+    // channel_->setWriteCallback([this] {
+    //     this->handleWrite_();
+    // });
+    // channel_->setErrorCallback([this] {
+    //     this->handleError_();
+    // });
     channel_->enableWriting();
 }
 
-auto Connector::removeAndResetChannel_()
-    -> int
+auto Connector::removeAndResetChannel_(bool delayReset)
+    -> void
 {
-    channel_->unregisterAllEvent();
+    TRACE();
+    if (channel_ == nullptr)
+    {
+        return;
+    }
+    channel_->diableAll();
     channel_->remove();
-    auto sockfd = channel_->getFd();
     // Can't reset channel_ here, because we are inside Channel::handleEvent
     // 为什么这里可以这样做，因为 eventloop will doPendingTask after handleEvent in same poll
-    loop_->queueTask([this] { this->resetChannel_(); });
-    return sockfd;
-}
-
-void Connector::resetChannel_()
-{
-    channel_.reset();
-}
-
-void Connector::channelWriteCB_()
-{
-    LOG_TRACE_FMT(log, "Connector::channelWriteCB_ {}", static_cast<int>(state_));
-
-    if (state_ == Connecting)
+    if (delayReset)
     {
-        auto sockfd = removeAndResetChannel_();
-        auto err    = Sock::getSocketError(sockfd);
-        if (err)
-        {
-            LOG_WARN_FMT(log, "Connector::handleWrite - SO_ERROR = {} {}", err, strerror(err));
-            retry_(sockfd);
-        }
-        else if (Sock::isSelfConnect(sockfd))
-        {
-            LOG_WARN_FMT(log, "Connector::handleWrite - Self connect");
-            retry_(sockfd);
-        }
-        else
-        {
-            setState_(Connected);
-            // 是否用户已经取消连接
-            if (not is_connect_canceled_)
-            {
-                new_connection_callback_(sockfd);
-            }
-            else // 防止幽灵连接
-            {
-                Sock::close(sockfd);
-            }
-        }
+        loop_->queueInLoop([this] { this->channel_.reset(); });
     }
     else
     {
-        // what happened?
-        assert(state_ == Disconnected);
+        channel_.reset();
     }
 }
 
-void Connector::channelErrorCB_()
+void Connector::handleWrite_()
 {
-    LOG_ERROR_FMT(log, "Connector::handleError state={}", static_cast<int>(state_.load()));
+    TRACE();
+    switch (state_)
+    {
+        case Connecting:{
+            auto err = Sock::getSocketError(sock_fd_);
+            if (err)
+            {
+                EASY_WARN("Connector::handleWrite - SO_ERROR = {} {}", err, strerror(err));
+                retry_(true);
+            }
+            else if (Sock::isSelfConnect(sock_fd_))
+            {
+                EASY_WARN("Connector::handleWrite - Self connect");
+                retry_(true);
+            }
+            else
+            {
+                // 此时算是连接已建立，Connector 不再管理该 channel，直接重置
+                removeAndResetChannel_(true);
+                setState_(Connected);
+                new_connection_callback_(sock_fd_);
+            }
+            break;
+        }
+        default:
+            //EPOLLERR | EPOLLOUT
+            assert(state_ == Disconnected);
+            break;
+    }
+}
+
+void Connector::handleError_()
+{
+    EASY_ERROR("Connector::handleError state={}", static_cast<int>(state_));
     if (state_ == Connecting)
     {
-        auto sockfd = removeAndResetChannel_();
-        auto err    = Sock::getSocketError(sockfd);
-        LOG_TRACE_FMT(log, "Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
-        retry_(sockfd);
+        auto err = Sock::getSocketError(sock_fd_);
+        EASY_TRACE("Connector::handleError - SO_ERROR = {} {}", err, strerror(err));
+        retry_(true);
     }
 }
 
-void Connector::retry_(int sockfd)
+void Connector::resetSockFd_()
 {
-    Sock::close(sockfd);
+    TRACE();
+    if (sock_fd_ >= 0)
+    {
+        Sock::close(sock_fd_);
+        sock_fd_ = -1;
+    }
+}
+
+void Connector::resetConnector_(bool delayResetChannel)
+{
+    TRACE();
+    loop_->assertInOwnerThread();
     setState_(Disconnected);
-    if (is_connect_canceled_)
-    {
-        // 一定间隔后充实
-        LOG_TRACE_FMT(log, "Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
-        retry_timer_id_ = loop_->runAfter(retry_delay_ms_ / 1000.0,
-                                          [this, weakOwner = onwner_] {
-                                              if (auto owner = weakOwner.lock(); owner != nullptr)
-                                              {
+    cancelReryTimer_();
+    removeAndResetChannel_(delayResetChannel);
+    resetSockFd_();
+}
 
-                                                  this->startInLoop_();
-                                              }
-                                          });
-        retry_delay_ms_ = std::min(retry_delay_ms_ * 2, c_max_retry_delay_ms);
-    }
-    else
-    {
-        LOG_DEBUG_FMT(log, "do not connecting");
-    }
+void Connector::retry_(bool delayResetChannel)
+{
+    TRACE();
+    assert(state_ != Disconnected);
+    loop_->assertInOwnerThread();
+    // 取消旧的定时器, 防止重复调用
+    resetConnector_(delayResetChannel);
+    // 一定间隔后充实
+    EASY_INFO("Connector::retry - Retry connecting to {} in {} milliseconds.", peer_addr_.toIpPortRepr(), retry_delay_ms_);
+    retry_timer_id_ = loop_->runAfter(retry_delay_ms_ / 1000.0, [this] {
+        this->startInLoop_();
+    });
+    retry_delay_ms_ = std::min(retry_delay_ms_ * 2, c_max_retry_delay_ms);
 }

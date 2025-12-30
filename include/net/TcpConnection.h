@@ -4,6 +4,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "net/Channel.h"
 #include "net/Buffer.h"
@@ -28,6 +29,7 @@ class Socket;
 class TcpConnection : public std::enable_shared_from_this<TcpConnection> {
     friend class TcpServer;
     friend class TcpClient;
+    friend class Channel;
 
 private:
     enum StateE {
@@ -67,12 +69,21 @@ private:
     std::any context_;
     // FIXME: creationTime_, lastReceiveTime_
     //        bytesReceived_, bytesSent_
+
+    TcpConnection(EventLoop* loop,
+                  std::string nameArg,
+                  int sockfd,
+                  const InetAddress& localAddr,
+                  const InetAddress& peerAddr);
+
     void setState_(StateE state) { state_ = state; }
 
-    void socketChannelReadCB_(Timestamp receiveTime);
-    void socketChannelWriteCB_();
+    /* ======================== for channel ======================== */
+    void handleRead_(Timestamp receiveTime);
+    void handleWrite_();
 
-    void socketChannelErrorCB_();
+    void handleError_();
+    void handleClose_();
 
     /**
      * @brief must be called in onwer loop
@@ -90,22 +101,16 @@ private:
     /* ======================== for tcpserver  ======================== */
     // called when TcpServer accepts a new connection
     // should be called only once
-    void postConnectionCreate_();
+    void initInLoop_();
     // called when TcpServer has removed me from its map
     // make sure the connection destruct in onwer loop thread
     void destructConnectionInOnwerLoop_(); // should be called only once
-    void socketChannelCloseCB_();
 
 public:
     /**
      * @attention User should not create this object.
      * @brief Constructs a TcpConnection with a connected sockfd
      */
-    TcpConnection(EventLoop* loop,
-                  std::string nameArg,
-                  int sockfd,
-                  const InetAddress& localAddr,
-                  const InetAddress& peerAddr);
     ~TcpConnection();
 
     TcpConnection(const TcpConnection&) = delete;
@@ -115,6 +120,16 @@ public:
     TcpConnection(TcpConnection&&) = delete;
     auto operator=(TcpConnection&&)
         -> TcpConnection& = delete;
+
+    template <typename... Args>
+    static auto create(Args... args)
+        -> Sptr<TcpConnection>
+    {
+        auto new_conn = std::make_shared<TcpConnection>(std::forward<Args>(args)...);
+
+        new_conn->socket_channel_->setHandler(new_conn.get());
+        new_conn->socket_channel_->tie(new_conn);
+    }
 
     auto getLoop() const
         -> EventLoop* { return owner_loop_; }
@@ -161,7 +176,7 @@ public:
                 auto send_msg_task = [tcp_conn = shared_from_this(), integer]() -> void {
                     tcp_conn->sendInOwnerLoop_(&integer, sizeof(integer));
                 };
-                owner_loop_->runTask(send_msg_task);
+                owner_loop_->runInLoop(send_msg_task);
             }
         }
     }

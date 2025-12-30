@@ -1,11 +1,12 @@
-#include <latch>
 #include <memory>
+#include <signal.h>
 
 #include "net/TcpServer.h"
 #include "net/Callbacks.h"
 #include "net/TcpConnection.h"
 #include "logger/Logger.h"
 #include "logger/LoggerManager.h"
+
 
 static auto log = GET_ROOT_LOGGER();
 
@@ -39,6 +40,7 @@ TcpServer::TcpServer(EventLoop* loop,
     acceptor_->setNewConnectionCallback([this](int sockfd, const InetAddress& peerAddr) {
         this->initNewConnInOwnerThread_(sockfd, peerAddr);
     });
+    setupSignalHandler_();
 }
 
 TcpServer::~TcpServer()
@@ -52,11 +54,8 @@ TcpServer::~TcpServer()
         // 把原始的智能指针复位 让栈空间的TcpConnectionPtr conn指向该对象 当conn出了其作用域 即可释放智能指针指向的对象
         // 销毁连接
         item.second.reset();
-        conn->getLoop()->runTask([guard_conn = conn] {
-            if (guard_conn->state_ != TcpConnection::Disconnected)
-            {
-                guard_conn->socketChannelCloseCB_();
-            }
+        conn->getLoop()->runInLoop([guard_conn = conn] {
+            guard_conn->forceCloseInOwnerLoop_();
         });
     }
 }
@@ -74,9 +73,9 @@ void TcpServer::start()
     {
         // 1. 启动底层的loop线程池
         threadpool_->start();
-
         // 2.将 Acceptor::listen 任务提交到主 EventLoop 执行以启动监听
-        base_loop_->runTask([this]() -> void {
+        base_loop_->runInLoop([this]() -> void {
+            this->signal_handler_->startInLoop_();
             this->acceptor_->listenInOwnerThread();
         });
     }
@@ -102,14 +101,13 @@ void TcpServer::initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAdd
     ++next_conn_id_;
     auto new_conn_name = name_ + buf.data();
 
-    LOG_INFO_FMT(log,"TcpServer::newConnection [{}] - new connection [{}] from {}",
-     name_, new_conn_name, peerAddr.toIpPortRepr());
+    LOG_INFO_FMT(log, "TcpServer::newConnection [{}] - new connection [{}] from {}", name_, new_conn_name, peerAddr.toIpPortRepr());
 
     // 2.2 通过sockfd获取其绑定的本机的ip地址和端口信息
     auto local_addr = InetAddress::GetLocalInetAddress(sockfd);
 
     // build the new connection
-    auto new_conn = std::make_shared<TcpConnection>(choosen_io_loop,
+    auto new_conn = TcpConnection::create(choosen_io_loop,
                                                     new_conn_name,
                                                     sockfd,
                                                     local_addr,
@@ -140,17 +138,16 @@ void TcpServer::initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAdd
     // 让subloop执行新连接的建立 回调TcpConnection::connectEstablished
 
     // 将连接建立的后续操作交给 ioLoop 执行
-    auto connnect_established_task = [new_conn]() -> void {
-        new_conn->postConnectionCreate_();
-    };
-    choosen_io_loop->runTask(connnect_established_task);
+    choosen_io_loop->runInLoop([new_conn]() -> void {
+        new_conn->initInLoop_();
+    });
 }
 
 void TcpServer::removeConnection_(const TcpConnectionPtr& conn)
 {
     // here capture tcpserver by this pointer is ok, cause tcpserver must be alive when removeConnection_ is called
     // otherwise, removeConnection will not be called in conn->closeCallback_
-    base_loop_->runTask([this, conn]() {
+    base_loop_->runInLoop([this, conn]() {
         this->removeConnectionInOwnerThread_(conn);
     });
 }
@@ -163,5 +160,57 @@ void TcpServer::removeConnectionInOwnerThread_(const TcpConnectionPtr& conn)
     connections_.erase(conn->getName());
     auto* io_loop = conn->getLoop();
     // make sure tcpconn destruct in owner loop thread, 单一职责，线程安全
-    io_loop->queueTask([tcpconn = conn] { tcpconn->destructConnectionInOnwerLoop_(); });
+    io_loop->queueInLoop([tcpconn = conn] { tcpconn->destructConnectionInOnwerLoop_(); });
+}
+
+void TcpServer::onSignalInLoop_(int signo)
+{
+    base_loop_->assertInOwnerThread();
+
+    LOG_INFO_FMT(log, "TcpServer received signal {}  ({})", signo, strsignal(signo));
+    stop();
+}
+
+void TcpServer::stop()
+{
+    if (stopping_.fetch_add(1) == 0)
+    {
+        base_loop_->runInLoop(
+            [self = shared_from_this()] {
+                self->stopInLoop_();
+            });
+    }
+}
+
+void TcpServer::stopInLoop_()
+{
+    base_loop_->assertInOwnerThread();
+
+    LOG_INFO_FMT(log, "TcpServer stopping...");
+
+    // 1️⃣ 停止接受新连接
+    acceptor_.reset();  // 或 acceptor_->disable()
+
+    // 2️⃣ 让所有连接进入“半关闭”
+    for (auto& [name, conn] : connections_)
+    {
+        conn->shutdown();   // 发送 FIN
+    }
+}
+
+void TcpServer::setupSignalHandler_()
+{
+    signal_handler_ = std::make_unique<SignalHandler>(base_loop_);
+
+    // 常见优雅关闭信号
+    signal_handler_->addSignal(SIGINT);
+    signal_handler_->addSignal(SIGTERM);
+    signal_handler_->addSignal(SIGQUIT);
+
+    signal_handler_->setSignalChannelReadCB(
+        [this](int signo) {
+            this->onSignalInLoop_(signo);
+        });
+
+    signal_handler_->startInLoop_();
 }

@@ -16,6 +16,7 @@ class EventLoop;
  * @details It's thread safe cause it`s member function only called by the onwer eventloop, i.e called by onwer thread.
  */
 class TimerQueue {
+friend Channel;
 private:
     using TimerDeleter = void(*)(Timer*);
 
@@ -55,7 +56,7 @@ private:
     void cancelInOwnerLoop_(Timer::Id timerId);
 
     // called when timerfd alarms
-    void timerChannelReadCB_();
+    void handleRead_(Timestamp);
     // move out all expired timers
     auto getExpired_(Timestamp now) -> std::vector<Entry>;
     void reset_(std::vector<Entry>& expired, Timestamp now);

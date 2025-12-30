@@ -64,7 +64,7 @@ inline auto LogFMT(const Logger& logger, LogLevel loglevel, std::source_location
         logger.getLoggerName(),
         loglevel,
         0,
-        std::this_thread::get_id(),
+        CurThr::getId(),
         CurThr::GetName(),
         0,
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()),
@@ -81,7 +81,7 @@ inline auto Log(const Logger& logger, LogLevel loglevel, std::source_location so
         logger.getLoggerName(),
         loglevel,
         0,
-        std::this_thread::get_id(),
+        CurThr::getId(),
         CurThr::GetName(),
         0,
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()),
@@ -103,7 +103,7 @@ inline auto Log(const Logger& logger, LogLevel loglevel, std::source_location so
     do {                                             \
         Log(*(logger_ptr),                   \
                     loglevel,                        \
-                    std::source_location::current()) \
+                    std::source_location::current()); \
     } while (0)
 
 // 假设 logger_ptr 指向的 Logger 对象有一个 isLevelEnabled(LogLevel) 方法

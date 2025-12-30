@@ -9,6 +9,34 @@
 #include <sys/epoll.h>
 class EventLoop;
 
+namespace {
+
+// 定义各种成员函数的探测概念
+template <typename T>
+concept HasHandleRead = requires(T t, Timestamp ts) {
+    { t.handleRead_(ts) } -> std::same_as<void>;
+};
+
+template <typename T>
+concept HasHandleWrite = requires(T t) {
+    { t.handleWrite_() } -> std::same_as<void>;
+};
+
+template <typename T>
+concept HasHandleClose = requires(T t) {
+    { t.handleClose_() } -> std::same_as<void>;
+};
+
+template <typename T>
+concept HasHandleError = requires(T t) {
+    { t.handleError_() } -> std::same_as<void>;
+};
+
+// 综合概念：只要实现其中任何一个回调，就可以被视为有效的处理器
+template <typename T>
+concept ChannelHandler = HasHandleRead<T> or HasHandleWrite<T> or HasHandleClose<T> or HasHandleError<T>;
+} // namespace
+
 /**
  * @attention
  * 1.one channel only belongs to one IO thread
@@ -19,6 +47,57 @@ class EventLoop;
  * 其他 fd owner 通过 channel 与 EPollPoller打交道, e.g. Tcpconnection, TimerQueue,封装了 sockfd 和其感兴趣的 event 如EPOLLIN、EPOLLOUT事件,负责 IO事件的分发, 时间发生后调用相应的回调操作
  **/
 class Channel {
+
+private:
+    // 内部抽象基类：定义事件接口
+    struct EventHandlerFacade
+    {
+        virtual ~EventHandlerFacade()  = default;
+        virtual void onRead(Timestamp) = 0;
+        virtual void onWrite()         = 0;
+        virtual void onClose()         = 0;
+        virtual void onError()         = 0;
+    };
+
+    // 内部模板实现类：类型擦除的关键
+    template <typename T>
+    struct EventHandlerProxy : public EventHandlerFacade
+    {
+        EventHandlerProxy(T* obj)
+            : instance_(obj)
+        {
+        }
+
+        void onRead(Timestamp t) override
+        {
+            if constexpr (HasHandleRead<T>)
+            {
+                instance_->handleRead_(t);
+            }
+        }
+        void onWrite() override
+        {
+            if constexpr (HasHandleWrite<T>)
+            {
+                instance_->handleWrite_();
+            }
+        }
+        void onClose() override
+        {
+            if constexpr (HasHandleClose<T>)
+            {
+                instance_->handleClose_();
+            }
+        }
+        void onError() override
+        {
+            if constexpr (HasHandleError<T>)
+            {
+                instance_->handleError_();
+            }
+        }
+        T* instance_; // 指向 TcpConnection 或 Acceptor 等
+    };
 
 public:
     enum EventEnum {
@@ -37,19 +116,22 @@ public:
         // channel里的 fd 已从Poller里删除,  但还 channel 还没从 EPoller
         NoEventRegistered = 2,
     };
+
 private:
     void update_();
     void HandleEventWithGuard_(Timestamp receiveTime);
 
-    EventLoop* const loop_;            // 事件循环
+    EventLoop* const loop_;      // 事件循环
     const int fd_;               // fd，Poller监听的对象, socket, eventfd, timerfd
     uint32_t registered_events_; // 注册fd感兴趣的事件
     uint32_t received_events_;   // Poller返回的具体发生的事件
-    State state_; //channel在Poller中的状态 标识channel是否已经添加到Poller中以及是否有事件注册
+    State state_;                // channel在Poller中的状态 标识channel是否已经添加到Poller中以及是否有事件注册
 
+    std::unique_ptr<EventHandlerFacade> handler_; // 类型擦除后的句柄
     std::weak_ptr<void> tie_;
     bool tied_;
-
+    bool event_handling_;
+    bool added_to_loop_;
     // 因为channel通道里可获知fd最终发生的具体的事件events，所以它负责调用具体事件的回调操作
     ReadEventCallback read_callback_;
     EventCallback write_callback_;
@@ -57,7 +139,6 @@ private:
     EventCallback error_callback_;
 
 public:
-
     Channel(EventLoop* loop, int fd);
 
     Channel(const Channel&) = delete;
@@ -73,14 +154,7 @@ public:
     /**
      * @brief  fd得到 Poller 通知以后 处理事件 handleEvent 在EventLoop::loop()中调用
      */
-    void handleEvent(Timestamp receiveTime);
-
-    // 设置回调函数对象
-    void setReadCallback(ReadEventCallback cb) { read_callback_ = std::move(cb); }
-    void setWriteCallback(EventCallback cb) { write_callback_ = std::move(cb); }
-    void setCloseCallback(EventCallback cb) { close_callback_ = std::move(cb); }
-    void setErrorCallback(EventCallback cb) { error_callback_ = std::move(cb); }
-
+    // void handleEvent(Timestamp receiveTime);
     /**
      * @brief Tie this channel to the owner object managed by shared_ptr,prevent the owner object being destroyed in handleEvent.
      */
@@ -113,7 +187,7 @@ public:
         registered_events_ &= ~EventEnum::WriteEvent;
         update_();
     }
-    void unregisterAllEvent()
+    void diableAll()
     {
         registered_events_ = EventEnum::NoneEvent;
         update_();
@@ -142,4 +216,14 @@ public:
      */
     void remove();
 
+    void handleEvent(Timestamp receiveTime);
+
+    // 使用 concept 约束模板参数，确保传进来的类是合法的
+    template<ChannelHandler T>
+    void setHandler(T* obj) {
+        handler_ = std::make_unique<EventHandlerProxy<T>>(obj);
+    }
+
+private:
+    void handleEventWithGuard_(Timestamp receiveTime);
 };

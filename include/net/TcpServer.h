@@ -12,10 +12,10 @@
 
 #include "EventLoop.h"
 #include "Acceptor.h"
+#include "SignalHandler.h"
 #include "Callbacks.h"
 #include "EventLoopThreadpool.h"
 #include "InetAddress.h"
-#include "TcpConnection.h"
 
 /**
  * @brief manager of tcpconnection, dont
@@ -42,7 +42,8 @@ private:
     const std::string ipport_repr_;
     const std::string name_;
 
-    std::unique_ptr<Acceptor> acceptor_; // 运行在 mainloop 任务就是监听新连接事件
+    Uptr<Acceptor> acceptor_; // 运行在 mainloop 任务就是监听新连接事件
+    Uptr<SignalHandler>  signal_handler_;
 
     std::shared_ptr<EventLoopThreadPool> threadpool_; // one loop per thread
 
@@ -55,6 +56,7 @@ private:
     ThreadInitCallback thread_init_callback_; // loop线程初始化的回调
 
     std::atomic_int started_;
+    std::atomic_int stopping_;
 
     int next_conn_id_;
     ConnectionMap connections_; // 保存所有的连接
@@ -121,9 +123,11 @@ public:
      */
     void start();
 
+    void stop();
+
 private:
     /**
-     * @brief
+     * @brief for acceptor
      * @details Not thread safe, but in loop
      */
     void initNewConnInOwnerThread_(int sockfd, const InetAddress& peerAddr);
@@ -138,4 +142,15 @@ private:
      * @details Not thread safe, but in loop
      */
     void removeConnectionInOwnerThread_(const TcpConnectionPtr& conn);
+
+
+    /**
+     * @brief for signal handler
+     */
+    void onSignalInLoop_(int signo);
+
+
+    void stopInLoop_();
+
+    void setupSignalHandler_();
 };

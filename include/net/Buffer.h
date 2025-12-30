@@ -30,9 +30,9 @@ public:
     inline static const size_t kInitialSize  = 1024;
 
     explicit Buffer(size_t initialSize = kInitialSize)
-        : buffer_(kCheapPrepend + initialSize)
-        , reader_idx_(kCheapPrepend)
-        , writer_idx_(kCheapPrepend)
+        : buffer_( kCheapPrepend + initialSize )
+        , reader_idx_{ kCheapPrepend }
+        , writer_idx_{ kCheapPrepend }
     {
         assert(getReadableBytesCount() == 0);
         assert(getWritableBytesCount() == initialSize);
@@ -89,6 +89,11 @@ public:
 
     auto readAllAndDiscard()
         -> void { retrieveAll_(); }
+
+    auto readNAndDiscard(size_t n) -> void
+    {
+        retrieveN_(n);
+    };
 
     auto readNAsString(size_t len)
         -> std::string
@@ -208,39 +213,37 @@ public:
         }
     }
 
-    ///
-    /// Prepend int64_t using network endian
-    ///
-    void PrependInt64(int64_t x)
+
+    template <typename Integer>
+        requires std::is_integral_v<Integer>
+    void prependInteger(Integer integer)
     {
-        int64_t be64 = Sock::HostToNetwork64(x);
-        Prepend(&be64, sizeof be64);
+        assert(getPrependableBytesCount() >= sizeof(Integer));
+        auto rst = Integer{};
+        if constexpr (sizeof(Integer) == 8)
+        {
+            rst = Sock::NetworkToHost64(integer);
+        }
+        else if constexpr (sizeof(Integer) == 4)
+        {
+            rst =  Sock::networkToHost32(integer);
+        }
+        else if constexpr (sizeof(Integer) == 2)
+        {
+            rst = Sock::networkToHost16(integer);
+        }
+        else if constexpr (sizeof(Integer) == 1)
+        {
+            // rst = rst;
+        }
+        prepend(&rst, sizeof(integer));
     }
 
-    ///
-    /// Prepend int32_t using network endian
-    ///
-    void PrependInt32(int32_t x)
-    {
-        int32_t be32 = Sock::hostToNetwork32(x);
-        Prepend(&be32, sizeof be32);
-    }
-
-    void PrependInt16(int16_t x)
-    {
-        int16_t be16 = Sock::HostToNetwork16(x);
-        Prepend(&be16, sizeof be16);
-    }
-
-    void PrependInt8(int8_t x)
-    {
-        Prepend(&x, sizeof x);
-    }
-    void Prepend(const void* /*restrict*/ data, size_t len)
+    void prepend(const void* /*restrict*/ data, size_t len)
     {
         assert(len <= getPrependableBytesCount());
         reader_idx_ -= len;
-        const char* d = static_cast<const char*>(data);
+        const auto* d = static_cast<const char*>(data);
         std::copy(d, d + len, begin_() + reader_idx_);
     }
 
@@ -290,7 +293,7 @@ private:
         -> const unsigned char*; 
 
     [[nodiscard]] auto getReadPos_() 
-        -> unsigned char*; 
+        -> unsigned char*;
 
     auto getWritePos_()
         ->  unsigned char*;

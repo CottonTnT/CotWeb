@@ -3,7 +3,6 @@
 #include "net/Callbacks.h"
 #include "TcpConnection.h"
 #include "net/InetAddress.h"
-#include <atomic>
 #include <memory>
 
 class Connector;
@@ -19,16 +18,14 @@ private:
     EventLoop* const loop_;
     ConnectorPtr connector_; // avoid revealing Connector
     const std::string name_;
-    ConnectionCallback connection_callback_;
+    ConnectionCallback conn_established_callback_;
     ConnectionCallback conn_close_callback_;
     MessageCallback message_callback_;
     WriteCompleteCallback write_complete_callback_;
-    std::atomic<bool> retry_;       // atomic
-    std::atomic<bool> willing_to_connect_;// 表示用户是否希望保持与服务端连接
-    // std::atomic<bool> keep_connection_; // atomic, 客户端是否期望与服务器连接
+    bool keep_retry_;       // atomic
+    bool willing_to_connect_;// 表示用户是否希望保持与服务端连接
     // always in loop thread
     int next_conn_id_;
-    mutable std::mutex mutex_;
     TcpConnectionPtr connection_;
     const InetAddress server_addr_;
 
@@ -36,7 +33,9 @@ private:
     /// Not thread safe, but in loop
     void initTcpConnection_(int sockfd);
     /// Not thread safe, but in loop
-    void removeConnection_(const TcpConnectionPtr& conn);
+    void removeConn_(const TcpConnectionPtr& conn);
+
+    void removeConnInLoop_(const TcpConnectionPtr& conn);
 public:
     TcpClient(const TcpClient&)                    = delete;
     TcpClient(TcpClient&&)                         = delete;
@@ -50,20 +49,23 @@ public:
               std::string nameArg);
     ~TcpClient(); // force out-line dtor, for std::unique_ptr members.
 
+    /**
+     * @brief not TS
+     */
     void connect();
+    /**
+     * @brief not TS
+     */
     void disconnect();
+    /**
+     * @brief note TS
+     */
     void stop();
 
-    auto getConnection() const
-        -> TcpConnectionPtr
-    {
-        auto _ = std::lock_guard<std::mutex> {mutex_};
-        return connection_;
-    }
 
     auto getLoop() const -> const EventLoop* { return loop_; }
-    auto retry() const -> bool { return retry_; }
-    void enableRetry() { retry_ = true; }
+    auto retry() const -> bool { return keep_retry_; }
+    void enableRetry() { keep_retry_ = true; }
 
     auto getName() const
         -> const std::string&
@@ -75,7 +77,7 @@ public:
     /// Not thread safe.
     void setConnetionCallback(ConnectionCallback cb)
     {
-        connection_callback_ = std::move(cb);
+        conn_established_callback_ = std::move(cb);
     }
 
     void setConnectionCloseCallback(ConnectionCallback cb)
@@ -83,7 +85,7 @@ public:
         conn_close_callback_ = std::move(cb);
     }
     /// Set message callback.
-    /// Not thread safe.
+    /// Not thread s: public std::enable_shared_from_this<Connector>afe.
     void setMessageCallback(MessageCallback cb)
     {
         message_callback_ = std::move(cb);

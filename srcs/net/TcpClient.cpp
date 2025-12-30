@@ -8,7 +8,7 @@
 //
 
 // #include "muduo/base/Logging.h"
-#include "logger/LogLevel.h"
+#include "common/util.hpp"
 #include "net/Callbacks.h"
 #include "net/Connector.h"
 #include "net/EventLoop.h"
@@ -16,76 +16,91 @@
 #include "net/Socketsops.h"
 #include "net/TcpConnection.h"
 #include "net/TcpClient.h"
-#include "logger/Logger.h"
-#include "logger/LoggerManager.h"
+#include "logger/EasyLog.h"
 
 #include <bit>
+#include <latch>
 #include <memory>
-
-static auto log = GET_ROOT_LOGGER();
 
 TcpClient::TcpClient(EventLoop* loop,
                      const InetAddress& serverAddr,
                      std::string nameArg)
-    : loop_ {loop}
+    : loop_ {UtilT::requiresNonNull(loop)}
+    , connector_ {new Connector {loop, serverAddr}}
     , name_ {std::move(nameArg)}
-    , connection_callback_ {defaultConnectionCallback}
+    , conn_established_callback_ {defaultConnectionCallback}
     , conn_close_callback_ {defaultConnectionCallback}
     , message_callback_ {defaultMessageCallback}
-    , retry_(false)
+    , keep_retry_ {false}
     , willing_to_connect_ {true}
     , next_conn_id_(1)
     , server_addr_ {serverAddr}
 {
     // FIXME setConnectFailedCallback
-    LOG_TRACE_FMT(log, "TcpClient::TcpClient[{}] - connector {}", name_, std::bit_cast<uint64_t>(connector_.get()));
+    EASY_DEBUG("TcpClient::TcpClient[{}] - connector {}", name_, std::bit_cast<uint64_t>(connector_.get()));
+    connector_->setNewConnectionCallback([this](int sockfd) {
+        this->initTcpConnection_(sockfd);
+    });
 }
 
 TcpClient::~TcpClient()
 {
-    LOG_TRACE_FMT(log, "TcpClient::~TcpClient[{}]", name_);
-    willing_to_connect_ = false;
+    loop_->assertInOwnerThread();
+    EASY_DEBUG("TcpClient::~TcpClient[{}]", name_);
+    auto latch = std::latch {1};
+    loop_->runInLoop([this, &latch]() {
+        if (connection_ != nullptr)
+        {
+            auto guard = connection_;
+            // 把原始的智能指针复位 让栈空间的TcpConnectionPtr conn指向该对象 当conn出了其作用域 即可释放智能指针指向的对象
+            // 销毁连接
+            connection_.reset();
+            loop_->runInLoop([guard] {
+                guard->forceCloseInOwnerLoop_();
+            });
+        }
+        latch.count_down();
+    });
+    latch.wait();
 }
 
 void TcpClient::connect()
 {
+    TRACE();
     willing_to_connect_ = true;
-    // FIXME: check state
-    if (connector_ == nullptr)
-    {
-        connector_ = std::make_unique<Connector>(loop_, server_addr_, weak_from_this());
-        connector_->setNewConnectionCallback([weak_this = weak_from_this()](int sockfd) {
-            if (auto server = weak_this.lock(); server != nullptr)
-            {
-                server->initTcpConnection_(sockfd);
-            }
-        });
-        LOG_INFO_FMT(log, "TcpClient::connect[{}] - connecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
-    }
+    EASY_INFO("TcpClient::connect[{}] - connecting to {}", this->name_, this->connector_->getServerAddress().toIpPortRepr());
     connector_->start();
 }
 
 void TcpClient::disconnect()
 {
-
+    TRACE();
     willing_to_connect_ = false;
-    {
-        auto _ = std::lock_guard<std::mutex> {mutex_};
-        if (connection_ != nullptr)
+    loop_->runInLoop([weak_guard = weak_from_this()]() {
+        if (auto guard = weak_guard.lock(); guard != nullptr)
         {
-            connection_->shutdown();
+            if (guard->connection_ != nullptr)
+            {
+                guard->connection_->shutdown();
+            }
         }
-    }
+        else
+        {
+            EASY_WARN("TcpClient::disconnect - client destruct already");
+        }
+    });
 }
 
 void TcpClient::stop()
 {
+    TRACE();
     willing_to_connect_ = false;
-    connector_->stop();
+    this->connector_->stop();
 }
 
 void TcpClient::initTcpConnection_(int sockfd)
 {
+    TRACE();
     loop_->assertInOwnerThread();
     auto peer_addr  = InetAddress {Sock::getPeerAddr(sockfd)};
     auto buf        = std::array<char, 256> {};
@@ -96,13 +111,13 @@ void TcpClient::initTcpConnection_(int sockfd)
 
     auto local_addr = InetAddress {Sock::getLocalAddr(sockfd)};
     // FIXME poll with zero timeout to double confirm the new connection
-    auto conn = std::make_shared<TcpConnection>(loop_,
+    auto conn = TcpConnection::create(loop_,
                                                 conn_name,
                                                 sockfd,
                                                 local_addr,
                                                 peer_addr);
 
-    conn->setConnetionCallback(connection_callback_);
+    conn->setConnetionCallback(conn_established_callback_);
     conn->setMessageCallback(message_callback_);
     conn->setWriteCompleteCallback(write_complete_callback_);
     conn->setCloseCallback(
@@ -110,30 +125,25 @@ void TcpClient::initTcpConnection_(int sockfd)
             user_close_cb(tcp_conn);
             if (auto server = wptr.lock(); server != nullptr)
             {
-                server->removeConnection_(tcp_conn);
+                server->removeConnInLoop_(tcp_conn);
             }
         });
-    {
-        auto _      = std::lock_guard<std::mutex> {mutex_};
-        connection_ = conn;
-    }
-    conn->postConnectionCreate_();
+    assert(connection_ == nullptr);
+    connection_ = conn;
+    loop_->runInLoop([conn]() {
+        conn->initInLoop_();
+    });
 }
 
-void TcpClient::removeConnection_(const TcpConnectionPtr& conn)
+void TcpClient::removeConnInLoop_(const TcpConnectionPtr& conn)
 {
+    TRACE();
     loop_->assertInOwnerThread();
-    assert(loop_ == conn->getLoop());
+    assert(connection_ == conn);
+    connection_.reset();
+    if (keep_retry_ && willing_to_connect_)
     {
-        // 没有把移除 conn 操作移至 TcpClient 所在线程
-        auto _ = std::lock_guard<std::mutex> {mutex_};
-        assert(connection_ == conn);
-        connection_.reset();
-    }
-
-    if (retry_ && willing_to_connect_.load())
-    {
-        LOG_INFO_FMT(log, "TcpClient::connect[{}] - Reconnecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
+        EASY_INFO("TcpClient::connect[{}] - Reconnecting to {}", name_, connector_->getServerAddress().toIpPortRepr());
         connector_->restart();
     }
 }

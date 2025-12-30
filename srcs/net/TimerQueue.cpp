@@ -87,15 +87,16 @@ TimerQueue::TimerQueue(EventLoop* loop)
     , calling_expired_timers_ {false}
 {
 
-    timerfd_channel_.setReadCallback([timerqueue = this](Timestamp) { timerqueue->timerChannelReadCB_(); });
+    // timerfd_channel_.setReadCallback([timerqueue = this](Timestamp) { timerqueue->timerChannelReadCB_(); });
     // we are always reading the timerfd, we disarm it with timerfd_settime.
     // 当所有的定时器都被移除后，TimerQueue 会解除武装（Disarm）timerfd，方法是将下一次到期时间设置为一个不会触发的值（例如，it_value 设为 0，这会导致 timerfd 立即被清除可读状态，但不会再次触发），或者不再调用 resetTimerfd
+    timerfd_channel_.setHandler(this);
     timerfd_channel_.enableReading();
 }
 
 TimerQueue::~TimerQueue()
 {
-    timerfd_channel_.unregisterAllEvent();
+    timerfd_channel_.diableAll();
     timerfd_channel_.remove();
     ::close(timerfd_);
     // do not remove channel, since we're in EventLoop::dtor();
@@ -112,7 +113,7 @@ auto TimerQueue::addTimer(TimerCallback cb,
 {
     auto new_timer = std::make_unique<Timer>(std::move(cb), when, interval);
     auto id        = new_timer->getTimerId();
-    owner_loop_->runTask([this, new_timer = new_timer.release()]() mutable {
+    owner_loop_->runInLoop([this, new_timer = new_timer.release()]() mutable {
         this->addTimerInOwnerLoop_(std::unique_ptr<Timer, TimerDeleter>{new_timer, timerFree_});
     });
     //返回新定时器的唯一标识符
@@ -121,7 +122,7 @@ auto TimerQueue::addTimer(TimerCallback cb,
 
 void TimerQueue::cancel(Timer::Id timerId)
 {
-    owner_loop_->runTask([timerqueue = this, timerId]() {
+    owner_loop_->runInLoop([timerqueue = this, timerId]() {
         timerqueue->cancelInOwnerLoop_(timerId);
     });
 }
@@ -169,7 +170,7 @@ void TimerQueue::cancelInOwnerLoop_(Timer::Id timerId)
     assert(timers_.size() == active_timers_.size());
 }
 
-void TimerQueue::timerChannelReadCB_()
+void TimerQueue::handleRead_(Timestamp)
 {
     owner_loop_->assertInOwnerThread();
 

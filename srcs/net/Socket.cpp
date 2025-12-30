@@ -7,9 +7,9 @@
 #include <cstring>
 
 #include "net/Socket.h"
-// #include "Logger.h"
 #include "net/InetAddress.h"
 #include "net/Socketsops.h"
+#include "logger/EasyLog.h"
 
 
 Socket::~Socket()
@@ -69,8 +69,7 @@ void Socket::shutdownWrite() const
 {
     if (::shutdown(sockfd_, SHUT_WR) < 0)
     {
-        //todo:log
-        // LOG_ERROR("shutdownWrite error");
+        EASY_ERROR("shutdownWrite error");
     }
 }
 

@@ -9,6 +9,18 @@
 #include <string.h>
 
 /* ======================== FormatterItem ======================== */
+class FunctionNameFormatItem {
+
+public:
+    static auto format(std::ostream& os,
+                       const LogEvent& event) -> size_t
+    {
+        const auto& content = event.getFunctionName();
+        os << content;
+        return content.size();
+    }
+};
+
 /**
  * @brief 消息format
  */
@@ -267,7 +279,8 @@ auto RegisterItemFactoryFunc()
             XX(N, ThreadNameFormatItem),  // N:线程名称
             XX(T, TabFormatItem),         // T:制表符
             XX(n, NewLineFormatItem),     // n:换行符
-            XX(%, PercentSignFormatItem), // n:换行符
+            XX(%, PercentSignFormatItem), // %:百分号
+            XX(v, FunctionNameFormatItem), //v:函数名
 #undef XX
 
         };

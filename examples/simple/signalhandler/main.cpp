@@ -21,7 +21,7 @@ auto main()
     signalHandler.addSignal(SIGHUP);
     signalHandler.addSignal(SIGQUIT);
 
-    signalHandler.setCallback([&](int signo) {
+    signalHandler.setSignalChannelReadCB([&](int signo) {
         switch (signo) {
         case SIGINT:
         case SIGTERM:
@@ -39,6 +39,6 @@ auto main()
         }
     });
 
-    signalHandler.start();
+    signalHandler.startInLoop_();
     loop.loop();
 }

@@ -18,11 +18,10 @@ auto LevelToString(LogLevel level)
         IFCODE(LogLevel::FATAL, FATAL);
         IFCODE(LogLevel::ERROR, ERROR);
         IFCODE(LogLevel::WARN, WARN);
-        IFCODE(LogLevel::TRACE, TRACE); // 缺失的 TRACE
+        IFCODE(LogLevel::TRACE, TRACE);
         IFCODE(LogLevel::INFO, INFO);
         IFCODE(LogLevel::DEBUG, DEBUG);
         IFCODE(LogLevel::ALL, ALL);
-
 #undef IFCODE
     }
 }

@@ -1,5 +1,7 @@
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <netinet/tcp.h>
@@ -14,18 +16,13 @@
 #include "net/TcpConnection.h"
 #include "net/Timestamp.h"
 #include "net/WeakCallback.h"
+#include "net/Socketsops.h"
 
-#include "logger/Logger.h"
-#include "logger/LoggerManager.h"
-
-static auto log = GET_ROOT_LOGGER();
+#include "logger/EasyLog.h"
 
 void defaultConnectionCallback(const TcpConnectionPtr& conn)
 {
-    LOG_TRACE_FMT(log, "defaultConnectionCallback: {}->{} is {}",
-                         conn->getLocalAddress().toIpPortRepr(),
-                         conn->getPeerAddress().toIpPortRepr(),
-                         conn->isConnected() ? "UP" : "DOWN");
+    EASY_TRACE("defaultConnectionCallback: {}->{} is {}", conn->getLocalAddress().toIpPortRepr(), conn->getPeerAddress().toIpPortRepr(), conn->isConnected() ? "UP" : "DOWN");
 }
 
 void defaultMessageCallback(const TcpConnectionPtr&,
@@ -64,21 +61,23 @@ TcpConnection::TcpConnection(EventLoop* loop,
     , high_watermark_ {c_highwater_mark} // 64M
 {
 
+    socket_channel_->setHandler(this);
     // 注册读写等事件的回调
     // 这里直接捕获 this 是因为其生命周期要长于socket_channel for it`s TcpConnection`s member
-    socket_channel_->setReadCallback([this](Timestamp) {
-        this->socketChannelReadCB_(Timestamp::now());
-    });
+    // socket_channel_->setReadCallback([this](Timestamp) {
+    //     this->handleRead_(Timestamp::now());
+    // });
 
-    socket_channel_->setWriteCallback([this]() {
-        this->socketChannelWriteCB_();
-    });
-    socket_channel_->setErrorCallback([this]() {
-        this->socketChannelErrorCB_();
-    });
-    socket_channel_->setCloseCallback([this]() {
-        this->socketChannelCloseCB_();
-    });
+    // socket_channel_->setWriteCallback([this]() {
+    //     this->handleWrite_();
+    // });
+    // socket_channel_->setErrorCallback([this]() {
+    //     this->handleError_();
+    // });
+    // socket_channel_->setCloseCallback([this]() {
+    //     this->handleClose_();
+    // });
+    // socket_channel_.
 
     // todo: log
     //  LOG_INFO("TcpConnection::ctor[%s] at fd=%d\n", name_.c_str(), sockfd);
@@ -87,9 +86,11 @@ TcpConnection::TcpConnection(EventLoop* loop,
 
 TcpConnection::~TcpConnection()
 {
-    // LOG_INFO("TcpConnection::dtor[%s] at fd=%d state=%d\n", name_.c_str(), channel_->GetFd(), (int)state_);
+    owner_loop_->assertInOwnerThread();
+    LOG_INFO_FMT(log, "TcpConnection::dtor[{}] at fd={} state={}", name_.c_str(), socket_channel_->getFd(), (int)state_);
     assert(state_ == Disconnected);
 }
+
 auto TcpConnection::getTcpInfo(struct tcp_info* tcpi) const
     -> bool
 {
@@ -124,7 +125,7 @@ void TcpConnection::send(std::string_view message)
             auto send_msg_task = [tcpconn = this, message = std::string {message}]() {
                 tcpconn->sendInOwnerLoop_(message);
             };
-            owner_loop_->runTask(send_msg_task);
+            owner_loop_->runInLoop(send_msg_task);
         }
     }
 }
@@ -142,7 +143,7 @@ void TcpConnection::send(Buffer buf)
             auto send_data_task = [tcp_conn = shared_from_this(), buf = std::move(buf)]() {
                 tcp_conn->sendInOwnerLoop_(buf.getReadableSV());
             };
-            owner_loop_->runTask(send_data_task);
+            owner_loop_->runInLoop(send_data_task);
         }
     }
 }
@@ -157,10 +158,9 @@ void TcpConnection::send(std::string message)
         }
         else
         {
-            auto send_msg_task = [tcp_conn = shared_from_this(), message = std::move(message)]() -> void {
-                tcp_conn->sendInOwnerLoop_(message);
-            };
-            owner_loop_->runTask(send_msg_task);
+            owner_loop_->runInLoop([guard = shared_from_this(), message = std::move(message)]() -> void {
+                guard->sendInOwnerLoop_(message);
+            });
         }
     }
 }
@@ -176,7 +176,8 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
 {
     owner_loop_->assertInOwnerThread();
 
-    // 之前调用过该connection的shutdown 不能再进行发送了
+    // 对于 send() -> queueTask(), 有可能在EventLoop doPendingTask() 前，
+    // 该TcpConnection已经关闭
     if (state_ == Disconnected)
     {
         LOG_WARN_FMT(log, "disconnected, give up writing");
@@ -196,9 +197,9 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
             remaining = len - nwrote;
             if (remaining == 0 && write_complete_callback_) // 全部发送完毕
             {
-                // 既然在这里数据全部发送完成，就不用再给channel设置epollout事件了
-                owner_loop_->queueTask([tcpconn = shared_from_this()]() {
-                    // here the "tcp->write..." make tcpconn will be valid in write_complete_callback_ unless the write_complete_callback_ will delete the tcpconn stupidly
+                // why queue in loop here instead of call write_complete_callback_ directly?
+                // Answer: https://github.com/chenshuo/muduo/discussions/560
+                owner_loop_->queueInLoop([tcpconn = shared_from_this()]() {
                     tcpconn->write_complete_callback_(tcpconn);
                 });
             }
@@ -234,7 +235,7 @@ void TcpConnection::sendInOwnerLoop_(const void* data, size_t len)
             and in_obuf < high_watermark_
             and high_watermark_callback_) // 待发送数据超过了高水位
         {
-            owner_loop_->queueTask([tcpconn = shared_from_this(), watermark_now = in_obuf + remaining](){
+            owner_loop_->queueInLoop([tcpconn = shared_from_this(), watermark_now = in_obuf + remaining]() {
                 tcpconn->high_watermark_callback_(tcpconn, watermark_now);
             });
         }
@@ -253,7 +254,8 @@ void TcpConnection::shutdown()
 
     if (auto expected = Connected; state_.compare_exchange_strong(expected, Disconnecting))
     {
-        owner_loop_->runTask([tcpconn = shared_from_this()] {
+        // how about weak ptr here?
+        owner_loop_->runInLoop([tcpconn = shared_from_this()] {
             tcpconn->shutdownInOwnerLoop_();
         });
     }
@@ -269,12 +271,11 @@ void TcpConnection::shutdownInOwnerLoop_()
     }
 }
 
-void TcpConnection::postConnectionCreate_()
+void TcpConnection::initInLoop_()
 {
     owner_loop_->assertInOwnerThread();
     assert(state_ == Connecting);
     setState_(Connected);
-    socket_channel_->tie(shared_from_this());
     socket_channel_->enableReading();
     connection_callback_(shared_from_this());
 }
@@ -291,11 +292,9 @@ void TcpConnection::forceClose()
     if (state_ == Connected || state_ == Disconnecting)
     {
         setState_(Disconnecting);
-        owner_loop_->queueTask([tcpconn = shared_from_this()] { tcpconn->forceCloseInOwnerLoop_(); });
+        owner_loop_->queueInLoop([tcpconn = shared_from_this()] { tcpconn->forceCloseInOwnerLoop_(); });
     }
 }
-
-
 
 void TcpConnection::forceCloseWithDelay(double seconds)
 {
@@ -315,7 +314,7 @@ void TcpConnection::forceCloseInOwnerLoop_()
     if (state_ == Connected || state_ == Disconnecting)
     {
         // as if we received 0 byte in handleRead();
-        socketChannelCloseCB_();
+        handleClose_();
     }
 }
 
@@ -344,7 +343,7 @@ void TcpConnection::setTcpNoDelay(bool on)
 
 void TcpConnection::startRead()
 {
-    owner_loop_->runTask([this] { startReadInOwnerLoop_(); });
+    owner_loop_->runInLoop([this] { startReadInOwnerLoop_(); });
 }
 
 void TcpConnection::startReadInOwnerLoop_()
@@ -359,7 +358,7 @@ void TcpConnection::startReadInOwnerLoop_()
 
 void TcpConnection::stopRead()
 {
-    owner_loop_->runTask([this] { stopReadInOwnerLoop_(); });
+    owner_loop_->runInLoop([this] { stopReadInOwnerLoop_(); });
 }
 
 void TcpConnection::stopReadInOwnerLoop_()
@@ -372,8 +371,7 @@ void TcpConnection::stopReadInOwnerLoop_()
     }
 }
 
-// 读是相对服务器而言的 当对端客户端有数据到达 服务器端检测到EPOLLIN 就会触发该fd上的回调 handleRead 取读走对端发来的数据
-void TcpConnection::socketChannelReadCB_(Timestamp receiveTime)
+void TcpConnection::handleRead_(Timestamp receiveTime)
 {
 
     owner_loop_->assertInOwnerThread();
@@ -386,19 +384,20 @@ void TcpConnection::socketChannelReadCB_(Timestamp receiveTime)
     }
     else if (n == 0) //  socket对端关闭
     {
-        socketChannelCloseCB_();
+        handleClose_();
     }
     else // 错误发生
     {
         errno = saved_errno;
-        // LOG_ERROR("TcpConnection::handleRead");
-        socketChannelErrorCB_();
+        EASY_ERROR("TcpConnection::socketChannelReadCB_");
+        handleError_();
     }
 }
 
-void TcpConnection::socketChannelWriteCB_()
+void TcpConnection::handleWrite_()
 {
     owner_loop_->assertInOwnerThread();
+    // muduo 不完整支持 half-open connection，详见https://github.com/chenshuo/muduo/discussions/588
     if (socket_channel_->isWriting())
     {
         auto saved_errno = 0;
@@ -411,11 +410,10 @@ void TcpConnection::socketChannelWriteCB_()
                 socket_channel_->diableWriting();
                 if (write_complete_callback_)
                 {
-                    // TcpConnection对象在其所在的subloop中 向 pendingFunctors_ 中加入回调
-                    // why not handle it right now?
-                    // make sure that tcpconnection only handle the IO, and unify call time of all callback in the eventloop
-                    owner_loop_->queueTask([tcpconn = shared_from_this()]() {
-                        tcpconn->write_complete_callback_(tcpconn);
+                // why queue in loop here instead of call write_complete_callback_ directly?
+                // Answer: https://github.com/chenshuo/muduo/discussions/560
+                    owner_loop_->runInLoop([conn = shared_from_this()]() {
+                        conn->write_complete_callback_(conn);
                     });
                 }
                 if (state_ == Disconnecting) // 如果正在关闭连接
@@ -427,24 +425,24 @@ void TcpConnection::socketChannelWriteCB_()
         }
         else
         {
-             LOG_ERROR_FMT(log, "TcpConnection::handleWrite");
+            EASY_ERROR("{}", strerror(saved_errno));
         }
     }
     else
     {
-         LOG_ERROR_FMT(log,"TcpConnection fd=%d is down, no more writing", socket_channel_->getFd());
+        EASY_ERROR("TcpConnection fd=%d is down, no more writing", socket_channel_->getFd());
     }
 }
 
-void TcpConnection::socketChannelCloseCB_()
+void TcpConnection::handleClose_()
 {
-     LOG_INFO_FMT(log, "TcpConnection::handleClose fd=%d state=%d", socket_channel_->getFd(), (int)state_);
+    EASY_INFO("TcpConnection::handleClose fd=%d state=%d", socket_channel_->getFd(), (int)state_);
     owner_loop_->assertInOwnerThread();
     assert(state_ == Disconnecting or state_ == Connected);
     // we don't close fd, leave it to dtor, so we can find leaks easily.
     setState_(Disconnected);
 
-    socket_channel_->unregisterAllEvent();
+    socket_channel_->diableAll();
     socket_channel_->remove();
     // 确保回调期间对象存活
     // so must be the last line
@@ -452,18 +450,10 @@ void TcpConnection::socketChannelCloseCB_()
     close_callback_(guard_this);
 }
 
-void TcpConnection::socketChannelErrorCB_()
+void TcpConnection::handleError_()
 {
-    int optval;
-    socklen_t optlen = sizeof(optval);
-    auto err         = 0;
-    if (::getsockopt(socket_channel_->getFd(), SOL_SOCKET, SO_ERROR, &optval, &optlen) < 0)
-    {
-        err = errno;
-    }
-    else
-    {
-        err = optval;
-    }
-     LOG_ERROR_FMT(log,"TcpConnection::handleError name:{} - SO_ERROR:{}\n", name_, err);
+    auto err = 0;
+    // 必须通过::getsockopt获取错误，否则会一直触发EPOLLERR事件
+    err = Sock::getSocketError(socket_channel_->getFd());
+    EASY_ERROR("TcpConnection::handleError name:{} - SO_ERROR:{}\n", name_, err);
 }

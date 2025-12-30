@@ -9,7 +9,7 @@
 #include "alias.h"
 namespace CurThr{
 
-    auto GetId()
+    auto getId()
         -> std::jthread::id;
     
     auto GetName()

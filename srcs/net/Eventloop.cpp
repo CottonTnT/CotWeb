@@ -3,7 +3,6 @@
 #include <bit>
 #include <cassert>
 #include <cstdint>
-#include <exception>
 #include <fcntl.h>
 #include <memory>
 #include <mutex>
@@ -14,13 +13,13 @@
 
 #include "net/EventLoop.h"
 #include "common/curthread.h"
-#include "logger/LogLevel.h"
 #include "net/EventLoopErrc.h"
 #include "net/Channel.h"
 #include "net/Epoller.h"
 #include "net/Timestamp.h"
 #include "logger/Logger.h"
 #include "logger/LoggerManager.h"
+#include "net/TimerQueue.h"
 
 
 static auto log = GET_ROOT_LOGGER();
@@ -79,7 +78,7 @@ EventLoop::EventLoop()
     , event_handling_ {false}
     , calling_pending_tasks_ {false}
     , iteration_count_ {0}
-    , owner_tid_ {CurThr::GetId()}
+    , owner_tid_ {CurThr::getId()}
     , poller_ {std::make_unique<EPollPoller>(this)}
     , timer_queue_ {new TimerQueue {this}}
     , wakeup_fd_ {createEventfd()}
@@ -95,9 +94,10 @@ EventLoop::EventLoop()
     else
         t_event_loop = this;
     // 设置wakeupfd的事件类型以及发生事件后的回调操作
-    wakeup_channel_->setReadCallback([this](Timestamp) {
-        this->wakeChannelReadCallback_();
-    });
+    // wakeup_channel_->setReadCallback([this](Timestamp) {
+    //     this->wakeChannelReadCallback_();
+    // });
+    wakeup_channel_->setHandler(this);
 
     // 每一个EventLoop都将监听wakeupChannel_的EPOLL读事件了
     wakeup_channel_->enableReading();
@@ -106,7 +106,7 @@ EventLoop::EventLoop()
 EventLoop::~EventLoop()
 {
     // 给Channel移除所有感兴趣的事件
-    wakeup_channel_->unregisterAllEvent();
+    wakeup_channel_->diableAll();
     // 把Channel从EventLoop上删除掉
     wakeup_channel_->remove();
     ::close(wakeup_fd_);
@@ -205,7 +205,7 @@ void EventLoop::quit()
 }
 
 // 在当前loop中执行cb
-void EventLoop::runTask(Task task)
+void EventLoop::runInLoop(Task task)
 {
     if (inOwnerThread()) // 当前 EventLoop 中直接同步执行任务
     {
@@ -213,12 +213,12 @@ void EventLoop::runTask(Task task)
     }
     else
     {
-        queueTask(std::move(task));
+        queueInLoop(std::move(task));
     }
 }
 
 // 把cb放入队列中 唤醒loop所在的线程执行cb
-void EventLoop::queueTask(Task task)
+void EventLoop::queueInLoop(Task task)
 {
     {
         auto _ = std::unique_lock<std::mutex> {mutex_};
@@ -236,7 +236,7 @@ void EventLoop::queueTask(Task task)
     }
 }
 
-void EventLoop::wakeChannelReadCallback_() const
+void EventLoop::handleRead_(Timestamp) const
 {
     auto one = uint64_t {1};
     auto n   = read(wakeup_fd_, &one, sizeof(one));

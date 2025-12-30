@@ -20,7 +20,7 @@ public:
 
     ~Socket();
 
-    [[nodiscard]] auto GetFd() const
+    [[nodiscard]] auto getFd() const
         -> int { return sockfd_; }
     void bindAddress(const InetAddress &localaddr) const; 
     void listen() const;

@@ -1,6 +1,9 @@
+#pragma once
 #include "net/EventLoop.h"
 #include "net/Channel.h"
+#include "net/Timestamp.h"
 class SignalHandler{
+friend Channel;
 public:
     using SignalCallback = std::function<void(int)>;
 private:
@@ -19,11 +22,12 @@ public:
     ~SignalHandler();
 
     void addSignal(int signo);
-    void setCallback(SignalCallback cb);
+    void setSignalChannelReadCB(SignalCallback cb);
 
-    void start();
+    void startInLoop_();
+    void restoreSignalsInLoop();
 
 private:
-    void signalChannelReadCB_();
+    void handleRead_(Timestamp);
 };
 

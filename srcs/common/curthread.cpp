@@ -10,7 +10,7 @@ namespace CurThr{
     static thread_local uint64_t s_CachedTid = c_not_set ;
     static thread_local std::string  s_ThreadName = "UnKnown";
 
-    auto GetId()
+    auto getId()
         -> std::jthread::id
     {
         if (s_CachedTid == c_not_set)

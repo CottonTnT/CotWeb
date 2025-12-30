@@ -23,7 +23,7 @@ class EPollPoller;
 2. the life time of EventLoop object is same as the thread so that it no need to be a heap object
  */
 class EventLoop {
-
+friend Channel;
 public:
     using Clock     = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
@@ -89,7 +89,7 @@ private:
      */
     void wakeupOwnerThread_() const;
 
-    void wakeChannelReadCallback_() const; // 给eventfd返回的文件描述符wakeupFd_绑定的事件回调 当wakeup()时 即有事件发生时 调用handleRead()读wakeupFd_的8字节 同时唤醒阻塞的epoll_wait
+    void handleRead_(Timestamp) const; // 给eventfd返回的文件描述符wakeupFd_绑定的事件回调 当wakeup()时 即有事件发生时 调用handleRead()读wakeupFd_的8字节 同时唤醒阻塞的epoll_wait
     void runPendingTasks_();               // 执行上层回调
 
     void AbortNotInLoopThread_() const;
@@ -128,7 +128,7 @@ public:
      * If in the same loop thread, cb is run within the function.
      * Safe to call from other threads.
      */
-    void runTask(Task task);
+    void runInLoop(Task task);
 
     /**
      * @brief 把上层注册的回调函数cb放入队列中 唤醒loop所在的线程执行cb
@@ -136,7 +136,7 @@ public:
      * Runs after finish pooling.
      * Safe to call from other threads.
      */
-    void queueTask(Task task);
+    void queueInLoop(Task task);
 
     // EventLoop的方法 => Poller的方法
     void updateChannel(Channel* channel);
@@ -155,9 +155,9 @@ public:
 
     // 判断EventLoop对象是否在自己的线程里
     [[nodiscard]] auto inOwnerThread() const
-        -> bool { return owner_tid_ == CurThr::GetId(); } // threadId_为EventLoop创建时的线程id CurrentThread::tid()为当前线程id
+        -> bool { return owner_tid_ == CurThr::getId(); } // threadId_为EventLoop创建时的线程id CurrentThread::tid()为当前线程id
 
-    /* ======================== timers ======================== */
+    // /* ======================== timers ======================== */
 
     ///
     /// Runs callback at 'time'.

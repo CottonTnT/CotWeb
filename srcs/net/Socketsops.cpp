@@ -17,11 +17,10 @@
 #include <unistd.h>
 
 #include "net/Socketsops.h"
+#include "logger/EasyLog.h"
 #include "net/Endian.h"
-#include "logger/Logger.h"
-#include "logger/LoggerManager.h"
+#include "logger/EasyLog.h"
 
-static auto log = GET_ROOT_LOGGER();
 
 namespace {
 
@@ -36,7 +35,7 @@ auto createNonblockingOrDie(sa_family_t family)
     auto sockfd = ::socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (sockfd < 0)
     {
-        LOG_SYSFATAL_FMT(log, "createNonblockingOrDie");
+        EASY_SYSFATAL( "createNonblockingOrDie");
     }
     return sockfd;
 }
@@ -126,7 +125,7 @@ void close(int sockfd)
 {
     if (::close(sockfd) < 0)
     {
-        // LOG_SYSERR << "close";
+        EASY_SYSERR("close");
     }
 }
 
@@ -233,7 +232,7 @@ getPeerAddr(int sockfd)
     auto addrlen = static_cast<socklen_t>(sizeof peeraddr);
     if (::getpeername(sockfd, sockaddrCast<sockaddr>(&peeraddr), &addrlen) < 0)
     {
-        // LOG_SYSERR << "getPeerAddr";
+        EASY_SYSERR("getPeerAddr");
     }
     return peeraddr;
 }

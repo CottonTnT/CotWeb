@@ -12,19 +12,20 @@ class LogEvent;
 
 /**
  * @details 模板参数说明:
- * - %%m 消息
- * - %%p 日志级别
- * - %%c 日志器名称
- * - %%d 日期时间，后面可跟一对括号指定时间格式，比如%%d{%%Y-%%m-%%d %%H:%%M:%%S}，这里的格式字符与 C 语言 strftime 一致
- * - %%r 该日志器创建后的累计运行毫秒数
- * - %%f 文件名
- * - %%l 行号
- * - %%t 线程id
- * - %%F 协程id
- * - %%N 线程名称
- * - %%% 百分号
- * - %%T 制表符
- * - %%n 换行
+ * - %m 消息
+ * - %p 日志级别
+ * - %c 日志器名称
+ * - %d 日期时间，后面可跟一对括号指定时间格式，比如%%d{%%Y-%%m-%%d %%H:%%M:%%S}，这里的格式字符与 C 语言 strftime 一致
+ * - %r 该日志器创建后的累计运行毫秒数
+ * - %f 文件名
+ * - %l 行号
+ * - %v 函数名
+ * - %t 线程id
+ * - %F 协程id
+ * - %N 线程名称
+ * - %% 百分号
+ * - %T 制表符
+ * - %n 换行
  *
  * 默认格式：%%d{%%Y-%%m-%%d %%H:%%M:%%S}%%T%%t%%T%%N%%T%%F%%T[%%p]%%T[%%c]%%T%%f:%%l%%T%%m%%n
  *
@@ -32,7 +33,7 @@ class LogEvent;
  */
 class LogFormatter {
 public:
-    explicit LogFormatter(std::string pattern = "%d{%Y-%m-%d %H:%M:%S} [%rms]%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n")
+    explicit LogFormatter(std::string pattern = "%d{%Y-%m-%d %H:%M:%S} [%rms] %t%T%N%T%F%T[%p]%T[%c]%T[%f:%l]%T[%v]%T%m%n")
         : pattern_(std::move(pattern))
     {
         startParse_();

@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cerrno>
 #include <expected>
 #include <fcntl.h>
@@ -5,18 +6,19 @@
 #include <sys/types.h>
 #include <system_error>
 #include <unistd.h>
-#include <latch>
 
 #include "net/Acceptor.h"
+#include "net/Channel.h"
 #include "net/EventLoop.h"
 #include "net/InetAddress.h"
 #include "net/Socketsops.h"
 #include "net/Timestamp.h"
+#include "latch"
 
 Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reuseport)
     : owner_loop_ {loop}
-    , accept_socket_ {Sock::createNonblockingOrDie(listenAddr.getFamily())}
-    , listen_channel_ {loop, accept_socket_.GetFd()} // 为监听套接字创建 Channel
+    , accept_socket_ {Sock::createNonblockingOrDie(listenAddr.getFamily())} // 为监听套接字创建 Channel
+    , listen_channel_ {new Channel{loop, accept_socket_.getFd()}}
     , listenning_ {false}
     , idle_fd_ {::open("/dev/null", O_RDONLY | O_CLOEXEC)} // 打开一个文件描述符，防止文件描述符耗尽
 {
@@ -25,18 +27,17 @@ Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusepor
     accept_socket_.bindAddress(listenAddr);
     // TcpServer::start() => Acceptor.listen() 如果有新用户连接 要执行一个回调(accept => connfd => 打包成Channel => 唤醒subloop)
     // baseloop监听到有事件发生 => accept_channel_(listenfd) => 执行该回调函数
-
-    listen_channel_.setReadCallback([acceptor = this](Timestamp) {
-        acceptor->socketChannelReadCB_();
-    });
+    // listen_channel_->setReadCallback([this](Timestamp) {
+    //     this->listenChannelReadCB_();
+    // });
+    listen_channel_->setHandler(this);
 }
 
 Acceptor::~Acceptor()
 {
-
-    // 确保 acceptor里的channel 已取消
-    auto latch = std::latch {1};
-    owner_loop_->runTask([&latch, this]() {
+    auto latch = std::latch{1};
+    // 确保 channel 在 owner loop 注销其状态
+    owner_loop_->runInLoop([this, &latch]() {
         this->cleanChannelInOnwerLoop_();
         latch.count_down();
     });
@@ -51,11 +52,17 @@ void Acceptor::listenInOwnerThread()
     listenning_ = true;
     accept_socket_.listen();
     // 2. register read event in poller
-    listen_channel_.enableReading();
+    listen_channel_->enableReading();
 }
 
+void Acceptor::cleanChannelInOnwerLoop_()
+{
+    owner_loop_->assertInOwnerThread();
+    listen_channel_->diableAll();
+    listen_channel_->remove();
+}
 // listenfd有事件发生了，就是有新用户连接了
-void Acceptor::socketChannelReadCB_()
+void Acceptor::handleRead_(Timestamp)
 {
     auto peer_addr = InetAddress {};
 
@@ -80,7 +87,7 @@ void Acceptor::socketChannelReadCB_()
             // todo:log
             //  执行与原来完全相同的 EMFILE 错误恢复逻辑
             ::close(idle_fd_);
-            idle_fd_ = ::accept4(accept_socket_.GetFd(), nullptr, nullptr, SOCK_CLOEXEC);
+            idle_fd_ = ::accept4(accept_socket_.getFd(), nullptr, nullptr, SOCK_CLOEXEC);
             ::close(idle_fd_);
             idle_fd_ = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
         }
@@ -130,13 +137,4 @@ void Acceptor::socketChannelReadCB_()
     // 然后对这个新连接 ::close(fd)（相当于告诉客户端：连接被拒绝）。
     // 最后重新打开 /dev/null 填回 idleFd_，继续待命
     // }
-}
-
-void Acceptor::cleanChannelInOnwerLoop_()
-{
-    // 确保当前在 I/O 线程
-    owner_loop_->assertInOwnerThread(); 
-    // 安全地从 I/O 集合中注销
-    listen_channel_.unregisterAllEvent(); 
-    listen_channel_.remove();     
 }

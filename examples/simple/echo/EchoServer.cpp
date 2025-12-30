@@ -7,6 +7,7 @@
 #include "net/TcpServer.h"
 #include "net/Timestamp.h"
 #include <memory>
+#include "net/TcpConnection.h"
 
 static auto log = GET_ROOT_LOGGER();
 EchoServer::EchoServer(EventLoop* loop,
