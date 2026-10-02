@@ -10,17 +10,16 @@ constexpr size_t c_k_event_count = 64;
 template <size_t N = c_k_event_count>
 class EventFixedBuffer {
 public:
-    using EventArray = std::array<LogEvent, N>;
+    using EventArray = std::array<LogRecordView, N>;
     EventFixedBuffer()
         : count_(0)
     {
     }
     // 尝试将 LogEvent 写入缓冲区
-    auto append(LogEvent event)
+    auto append(LogRecordView event)
         -> bool
     {
-        if (count_ < c_k_event_count)
-        {
+        if (count_ < c_k_event_count) {
             data_[count_] = std::move(event); // 复制 LogEvent 对象
             count_++;
             return true;
@@ -34,11 +33,11 @@ public:
     [[nodiscard]] auto available() const -> size_t { return N - count_; }
     // 获取事件数组的起始指针
     auto data() const
-        -> const LogEvent* { return data_.data(); }
+        -> const LogRecordView* { return data_.data(); }
     auto getEventSpan()
-        -> std::span<LogEvent>
+        -> std::span<LogRecordView>
     {
-        return std::span<LogEvent>(data_.data(), count_);
+        return std::span<LogRecordView>(data_.data(), count_);
     }
     // 缓冲区清零（重置事件计数）
     void reset() { count_ = 0; }

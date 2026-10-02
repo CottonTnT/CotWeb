@@ -4,31 +4,28 @@
 #include "LogFormatter.h"
 #include "common/alias.h"
 #include <cstddef>
-#include  <fstream>
-
+#include <fstream>
 
 class StdoutAppender {
 public:
-    static void log(const LogFormatter& fmter, const LogEvent& event);
+    static void log(const LogFormatter& fmter, const LogRecordView& event);
 };
 
-
-//todo:to test, to make it better
+// todo:to test, to make it better
 class RollingFileAppender {
 
 private:
-    static constexpr size_t c_default_max_file_size = 64_mb ; 
-    static constexpr Seconds c_default_roll_interval = Seconds{24 * 60 * 60}; // 24 hours
+    static constexpr size_t c_default_max_file_size = 64_mb;
+    static constexpr Seconds c_default_roll_interval = Seconds { 24 * 60 * 60 }; // 24 hours
     // ---  Flush 策略相关常量 ---
-    static constexpr Seconds c_flush_interval_seconds = Seconds{3}; // 3秒强制刷新一次
-    static constexpr uint64_t c_flush_max_appends = 1024;          // 每 1024 次写入强制刷新
+    static constexpr Seconds c_flush_interval_seconds = Seconds { 3 }; // 3秒强制刷新一次
+    static constexpr uint64_t c_flush_max_appends = 1024; // 每 1024 次写入强制刷新
 
     std::mutex mutex_;
-    //文件路径和名称
+    // 文件路径和名称
     std::string filename_;
     std::string basename_; // 用于重命名时构建新文件名
     std::ofstream filestream_;
-
 
     // 滚动机制配置
     const size_t max_bytes_; // 单个日志文件的最大字节数
@@ -37,7 +34,7 @@ private:
     // 状态追踪
     TimePoint last_open_time_ = TimePoint::min();
     bool reopen_error_ = false;
-    size_t offset_ = 0; //当前已写入的字节数
+    size_t offset_ = 0; // 当前已写入的字节数
 
     // flush 状态追踪 ---
     TimePoint last_flush_time_ = TimePoint::min(); // 上次刷新时间
@@ -58,22 +55,19 @@ private:
 
 public:
     explicit RollingFileAppender(std::string filename,
-                                 size_t max_bytes_     = c_default_max_file_size,
-                                 Seconds roll_interval = c_default_roll_interval);
-    RollingFileAppender(const RollingFileAppender&)            = delete;
-    RollingFileAppender(RollingFileAppender&&)                 = delete;
+        size_t max_bytes_ = c_default_max_file_size,
+        Seconds roll_interval = c_default_roll_interval);
+    RollingFileAppender(const RollingFileAppender&) = delete;
+    RollingFileAppender(RollingFileAppender&&) = delete;
     auto operator=(const RollingFileAppender&) -> RollingFileAppender& = delete;
-    auto operator=(RollingFileAppender&&) -> RollingFileAppender&      = delete;
+    auto operator=(RollingFileAppender&&) -> RollingFileAppender& = delete;
     ~RollingFileAppender();
 
-    void log(const LogFormatter& fmter, const LogEvent& event);
-
+    void log(const LogFormatter& fmter, const LogRecordView& event);
 };
 
 // todo
 class SocketAppender;
 
-
-//todo
+// todo
 class SystemAppender;
-

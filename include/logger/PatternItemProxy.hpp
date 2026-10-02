@@ -4,19 +4,16 @@
 #include <iostream>
 #include <print>
 
-
-
 template <typename ItemImpl>
 class PatternItemProxy : public PatternItemFacade {
 public:
-
     template <typename... Args>
     explicit PatternItemProxy(Args&&... args)
-        : item_{ std::forward<Args>(args)... }
+        : item_ { std::forward<Args>(args)... }
     {
     }
 
-    auto format(std::ostream& os, const LogEvent& event)
+    auto format(std::ostream& os, const LogRecordView& event)
         -> size_t override
     {
         return item_.format(os, event);

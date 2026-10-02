@@ -2,6 +2,8 @@
 
 #include <string_view>
 
+namespace X {
+
 enum class LogLevel {
     /// 系统错误
     SYSFATAL = 9,
@@ -25,10 +27,10 @@ enum class LogLevel {
 };
 
 auto LevelToString(LogLevel level)
-        ->  std::string_view;
+    -> std::string_view;
 
 auto StringToLogLevel(std::string_view str)
-        ->  LogLevel;
+    -> LogLevel;
 
 auto operator<=(LogLevel lhs, LogLevel rhs)
     -> bool;
@@ -41,3 +43,4 @@ auto operator>=(LogLevel lhs, LogLevel rhs)
     -> bool;
 auto operator<(LogLevel lhs, LogLevel rhs)
     -> bool;
+}

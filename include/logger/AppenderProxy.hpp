@@ -5,12 +5,11 @@
 #include "AppenderFacade.h"
 #include "LogFormatter.h"
 
-
 class LogFormatter;
-class LogEvent;
+class LogRecordView;
 
 template <typename T>
-concept IsAppenderImpl = requires(T x, LogFormatter y, LogEvent z) {
+concept IsAppenderImpl = requires(T x, LogFormatter y, LogRecordView z) {
     x.log(y, z);
 };
 
@@ -19,16 +18,17 @@ concept IsAppenderImpl = requires(T x, LogFormatter y, LogEvent z) {
  */
 
 template <typename Impl>
-requires IsAppenderImpl<Impl>
-class AppenderProxy :  public AppenderFacade {
+    requires IsAppenderImpl<Impl>
+class AppenderProxy : public AppenderFacade {
 public:
     AppenderProxy()
-        : formatter_ {LogFormatter{}}
-        {}
-    AppenderProxy(const AppenderProxy&)            = delete;
-    AppenderProxy(AppenderProxy&&)                 = delete;
+        : formatter_ { LogFormatter { } }
+    {
+    }
+    AppenderProxy(const AppenderProxy&) = delete;
+    AppenderProxy(AppenderProxy&&) = delete;
     auto operator=(const AppenderProxy&) -> AppenderProxy& = delete;
-    auto operator=(AppenderProxy&&) -> AppenderProxy&      = delete;
+    auto operator=(AppenderProxy&&) -> AppenderProxy& = delete;
 
     template <typename... Ts>
     explicit AppenderProxy(LogFormatter fmter, Ts&&... ts)
@@ -39,7 +39,7 @@ public:
 
     template <typename... Ts>
     explicit AppenderProxy(Ts&&... ts)
-        : formatter_{ LogFormatter{} }
+        : formatter_ { LogFormatter { } }
         , impl_(std::forward<Ts>(ts)...)
     {
     }
@@ -56,12 +56,12 @@ public:
         formatter_ = std::move(formatter);
     }
 
-    void log(const LogEvent& event) override
+    void log(const LogRecordView& event) override
     {
         impl_.log(formatter_, event);
     }
 
-     ~AppenderProxy() override = default;
+    ~AppenderProxy() override = default;
 
 private:
     LogFormatter formatter_;

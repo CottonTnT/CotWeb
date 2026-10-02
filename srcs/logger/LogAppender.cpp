@@ -8,19 +8,19 @@
 #include <time.h>
 
 /* ======================== StdoutAppender ======================== */
-void StdoutAppender::log(const LogFormatter& fmter, const LogEvent& event)
+void StdoutAppender::log(const LogFormatter& fmter, const LogRecordView& event)
 {
     fmter.format(std::cout, event);
 }
 
 /* ======================== FileAppender ======================== */
 RollingFileAppender::RollingFileAppender(std::string filename,
-                                         size_t max_bytes_,
-                                         Seconds roll_interval)
-    : filename_ {std::move(filename)}
-    , basename_ {std::filesystem::path {filename_}.filename().string()}
-    , max_bytes_ {max_bytes_}
-    , roll_interval_ {roll_interval}
+    size_t max_bytes_,
+    Seconds roll_interval)
+    : filename_ { std::move(filename) }
+    , basename_ { std::filesystem::path { filename_ }.filename().string() }
+    , max_bytes_ { max_bytes_ }
+    , roll_interval_ { roll_interval }
 {
     openFile_();
 }
@@ -28,14 +28,13 @@ RollingFileAppender::RollingFileAppender(std::string filename,
 RollingFileAppender::~RollingFileAppender()
 {
     auto _ = std::lock_guard<std::mutex>(mutex_);
-    if (filestream_.is_open())
-    {
+    if (filestream_.is_open()) {
         filestream_.close();
     }
 }
 
 auto RollingFileAppender::openFile_()
-    ->void
+    -> void
 
 {
     // 清除错误标识，准备重新打开
@@ -43,18 +42,16 @@ auto RollingFileAppender::openFile_()
     // 设置流：在 failbit 或 badbit 被设置时抛出异常
     filestream_.exceptions(std::ofstream::failbit | std::ofstream::badbit);
 
-    try
-    {
+    try {
         // 使用 std::ios::app 模式打开，确保写入时追加到文件末尾, std::ios::binary 确保 '\n' 写入1字节
         filestream_.open(filename_, std::ios::out | std::ios::app | std::ios::binary);
-    } catch (const std::ios_base::failure& e)
-    {
+    } catch (const std::ios_base::failure& e) {
         const auto& ec = e.code();
         std::cerr << "--- 文件操作失败 ---" << std::endl;
         std::cerr << "错误描述 (what()): " << e.what() << std::endl;
         std::cerr << "错误码 (error_code): " << ec.value() << std::endl;
         std::cerr << "错误类别 (category): " << ec.category().name() << std::endl;
-        throw std::system_error{ec};
+        throw std::system_error { ec };
     }
     last_open_time_ = Clock::now();
     // 获取当前文件大小
@@ -64,8 +61,7 @@ auto RollingFileAppender::openFile_()
 auto RollingFileAppender::rollFile_()
     -> void
 {
-    if (not filestream_.is_open())
-    {
+    if (not filestream_.is_open()) {
         // 如果文件未打开，直接尝试打开新文件
         openFile_();
     }
@@ -78,10 +74,9 @@ auto RollingFileAppender::rollFile_()
 
     // 3. 重命名文件 (旧文件名 -> 新文件名)
     // 使用 std::rename 进行原子操作
-    if (std::rename(filename_.c_str(), new_filename.c_str()) != 0)
-    {
-        throw std::system_error{std::error_code{errno, std::system_category()},
-                                "重命名日志文件失败: " + filename_ + " -> " + new_filename};
+    if (std::rename(filename_.c_str(), new_filename.c_str()) != 0) {
+        throw std::system_error { std::error_code { errno, std::system_category() },
+            "重命名日志文件失败: " + filename_ + " -> " + new_filename };
     }
 
     // 4. 打开新的日志文件
@@ -92,12 +87,11 @@ auto RollingFileAppender::shouldRoll_() const
     -> bool
 {
     // 1. 大小检查
-    if (offset_ > max_bytes_)
-    {
+    if (offset_ > max_bytes_) {
         return true;
     }
     // 2. 时间检查 (如果上次打开时间超过滚动间隔)
-    auto now     = Clock::now();
+    auto now = Clock::now();
     auto elapsed = std::chrono::duration_cast<Seconds>(now - last_open_time_);
     return elapsed > roll_interval_;
 }
@@ -112,10 +106,11 @@ auto RollingFileAppender::getNewLogFileName_() const
     auto extension = p.extension().string(); // 例如：对于 "app.log"，得到 ".log"
 
     // 2. 获取时间戳字符串
-    auto now        = std::chrono::time_point_cast<Seconds>(std::chrono::system_clock::now());
+    auto now = std::chrono::time_point_cast<Seconds>(std::chrono::system_clock::now());
     auto zoned_time = std::chrono::zoned_time<Seconds> {
         std::chrono::current_zone(),
-        now};
+        now
+    };
     auto time_point_str = std::format("{:%Y-%m-%d-%H-%M-%S}", zoned_time.get_local_time());
     // 3. 构建新的文件名: stem.YYYYMMDD-HHMMSS.extension
     // 注意：如果原文件名没有扩展名，extension会是空字符串
@@ -128,14 +123,13 @@ auto RollingFileAppender::getNewLogFileName_() const
     return (p.parent_path() / new_filename).string();
 }
 
-void RollingFileAppender::log(const LogFormatter& fmter, const LogEvent& event)
+void RollingFileAppender::log(const LogFormatter& fmter, const LogRecordView& event)
 {
     // 1. 线程安全保护
-    auto _ = std::lock_guard<std::mutex> {mutex_};
+    auto _ = std::lock_guard<std::mutex> { mutex_ };
 
     // 2. 检查是否需要滚动 (时间或大小)
-    if (shouldRoll_())
-    {
+    if (shouldRoll_()) {
         rollFile_();
     }
     // 4. 格式化并写入
@@ -153,17 +147,16 @@ void RollingFileAppender::log(const LogFormatter& fmter, const LogEvent& event)
     // 7. 检查 Flush 条件
 
     auto now = Clock::now();
-    
+
     // 检查是否超过时间间隔
     auto time_to_flush = (now - last_flush_time_) > c_flush_interval_seconds;
-    
+
     // 检查是否达到最大写入次数
     bool count_to_flush = flush_count_ >= c_flush_max_appends;
 
-    if (time_to_flush || count_to_flush)
-    {
+    if (time_to_flush || count_to_flush) {
         // 调用 std::ostream::flush() 将数据从 C++ 缓冲区推送到操作系统
-        filestream_.flush(); 
+        filestream_.flush();
 
         // 重置状态
         last_flush_time_ = now;

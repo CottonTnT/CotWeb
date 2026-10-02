@@ -5,15 +5,15 @@
 
 #include <cstddef>
 #include <functional>
-#include <sys/types.h>
 #include <string.h>
+#include <sys/types.h>
 
 /* ======================== FormatterItem ======================== */
 class FunctionNameFormatItem {
 
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event) -> size_t
+        const LogRecordView& event) -> size_t
     {
         const auto& content = event.getFunctionName();
         os << content;
@@ -27,7 +27,7 @@ public:
 class MessageFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event) -> size_t
+        const LogRecordView& event) -> size_t
     {
         const auto& content = event.getContent();
         os << content;
@@ -39,7 +39,7 @@ public:
 class LevelFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         auto sv = LevelToString(event.getLevel());
@@ -54,7 +54,7 @@ public:
 class ElapseFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         os << event.getElapse();
@@ -68,7 +68,7 @@ public:
 class NameFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         const auto& name = event.getLoggerName();
@@ -83,7 +83,7 @@ public:
 class ThreadIdFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         os << event.getThreadId();
@@ -97,7 +97,7 @@ public:
 class FiberIdFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
 
     {
@@ -112,7 +112,7 @@ public:
 class ThreadNameFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         const auto& name = event.getThreadName();
@@ -124,7 +124,7 @@ public:
 class NewLineFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& /*event*/)
+        const LogRecordView& /*event*/)
         -> size_t
     {
         os.put('\n');
@@ -138,7 +138,7 @@ public:
 class FilenameFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         const auto& filename = event.getFilename();
@@ -153,7 +153,7 @@ public:
 class LineFormatItem {
 public:
     static auto format(std::ostream& os,
-                       const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         os << event.getLine();
@@ -167,7 +167,7 @@ public:
 
 class TabFormatItem {
 public:
-    static auto format(std::ostream& os, const LogEvent& /*event*/)
+    static auto format(std::ostream& os, const LogRecordView& /*event*/)
         -> ssize_t
     {
         os.put('\t');
@@ -177,7 +177,7 @@ public:
 
 class PercentSignFormatItem {
 public:
-    static auto format(std::ostream& os, const LogEvent& /*event*/)
+    static auto format(std::ostream& os, const LogRecordView& /*event*/)
         -> size_t
     {
         os << "%";
@@ -192,13 +192,13 @@ public:
 class DateTimeFormatItem {
 public:
     explicit DateTimeFormatItem(std::string date_format)
-        : date_format_ {std::move(date_format)}
+        : date_format_ { std::move(date_format) }
     {
     }
 
     // todo:exception
     auto format(std::ostream& os,
-                const LogEvent& event)
+        const LogRecordView& event)
         -> size_t
     {
         auto time = event.getTime();
@@ -206,8 +206,8 @@ public:
         struct tm tm;
         localtime_r(&time, &tm);
 
-        char buf[64] = {'\0'};
-        std::ignore  = strftime(buf, 63, date_format_.c_str(), &tm);
+        char buf[64] = { '\0' };
+        std::ignore = strftime(buf, 63, date_format_.c_str(), &tm);
 
         os << buf;
         return strlen(buf);
@@ -231,12 +231,12 @@ private:
 class StringFormatItem {
 public:
     explicit StringFormatItem(std::string str)
-        : str_ {std::move(str)}
+        : str_ { std::move(str) }
     {
     }
 
     auto format(std::ostream& os,
-                const LogEvent& /*event*/)
+        const LogRecordView& /*event*/)
         -> size_t
     {
         os << str_;
@@ -259,40 +259,42 @@ private:
 
 using ItemFactoryFunc = std::function<Sptr<PatternItemFacade>()>;
 auto RegisterItemFactoryFunc()
-    -> std::unordered_map<std::string, ItemFactoryFunc> {
-        auto func_map = std::unordered_map<std::string, ItemFactoryFunc> {
-#define XX(str, ItemType)                                                       \
-    {                                                                           \
-        #str, []() -> Sptr<PatternItemFacade> {                                 \
-            return Sptr<PatternItemFacade> {new PatternItemProxy<ItemType> {}}; \
-        }                                                                       \
+    -> std::unordered_map<std::string, ItemFactoryFunc>
+{
+    auto func_map = std::unordered_map<std::string, ItemFactoryFunc> {
+#define XX(str, ItemType)                                                          \
+    {                                                                              \
+        #str, []() -> Sptr<PatternItemFacade> {                                    \
+            return Sptr<PatternItemFacade> { new PatternItemProxy<ItemType> { } }; \
+        }                                                                          \
     }
 
-            XX(m, MessageFormatItem),     // m:消息
-            XX(p, LevelFormatItem),       // p:日志级别
-            XX(c, NameFormatItem),        // c:日志器名称
-            XX(r, ElapseFormatItem),      // r:累计毫秒数
-            XX(f, FilenameFormatItem),    // f:文件名
-            XX(l, LineFormatItem),        // l:行号
-            XX(t, ThreadIdFormatItem),    // t:编程号
-            XX(F, FiberIdFormatItem),     // F:协程号
-            XX(N, ThreadNameFormatItem),  // N:线程名称
-            XX(T, TabFormatItem),         // T:制表符
-            XX(n, NewLineFormatItem),     // n:换行符
-            XX(%, PercentSignFormatItem), // %:百分号
-            XX(v, FunctionNameFormatItem), //v:函数名
+        XX(m, MessageFormatItem), // m:消息
+        XX(p, LevelFormatItem), // p:日志级别
+        XX(c, NameFormatItem), // c:日志器名称
+        XX(r, ElapseFormatItem), // r:累计毫秒数
+        XX(f, FilenameFormatItem), // f:文件名
+        XX(l, LineFormatItem), // l:行号
+        XX(t, ThreadIdFormatItem), // t:编程号
+        XX(F, FiberIdFormatItem), // F:协程号
+        XX(N, ThreadNameFormatItem), // N:线程名称
+        XX(T, TabFormatItem), // T:制表符
+        XX(n, NewLineFormatItem), // n:换行符
+        XX(%, PercentSignFormatItem), // %:百分号
+        XX(v, FunctionNameFormatItem), // v:函数名
 #undef XX
 
-        };
-return func_map;
+    };
+    return func_map;
 }
 
 using StatusItemFactoryFunc = std::function<Sptr<PatternItemFacade>(std::string)>;
 
 auto RegisterStatusItemFactoryFunc()
-    -> std::unordered_map<std::string, StatusItemFactoryFunc> {
+    -> std::unordered_map<std::string, StatusItemFactoryFunc>
+{
 
-        return std::unordered_map<std::string, StatusItemFactoryFunc> {
+    return std::unordered_map<std::string, StatusItemFactoryFunc> {
 
 #define XX(str, ItemType)                                                                                                  \
     {                                                                                                                      \
@@ -301,10 +303,10 @@ auto RegisterStatusItemFactoryFunc()
         }                                                                                                                  \
     }
 
-            XX(d, DateTimeFormatItem),
-            XX(str, StringFormatItem),
+        XX(d, DateTimeFormatItem),
+        XX(str, StringFormatItem),
 
 #undef XX
 
-        };
+    };
 }

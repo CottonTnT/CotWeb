@@ -3,6 +3,24 @@
 #include <cstddef>
 #include <memory>
 
+#define INVALID64 (~0ULL)
+#define INVALID32 0xFFFFFFFF
+#define INVALID16 0xFFFF
+#define INVALID8 0xFF
+
+#define MAX_U8 0xFF
+#define MAX_U16 0xFFFF
+#define MAX_U32 0xFFFFFFFF
+#define MAX_U64 (~0ULL)
+
+using u8 = std::uint8_t;
+using s8 = std::int8_t;
+using u16 = std::uint16_t;
+using s16 = std::int16_t;
+using u32 = std::uint32_t;
+using s32 = std::int32_t;
+using u64 = std::uint64_t;
+using s64 = std::int64_t;
 
 /* ======================== 标准库别名 ======================== */
 template <typename T>
@@ -33,23 +51,19 @@ using Seconds = std::chrono::seconds;
 // 并且未来可以扩展操作符重载等功能。
 class ImmutableMemorySize {
 private:
-    const size_t value_;
+    const std::size_t value_;
 
 public:
     // 构造函数设为 constexpr, 使得对象可以在编译期构造
-    constexpr explicit ImmutableMemorySize(uint64_t value) noexcept
+    constexpr explicit ImmutableMemorySize(std::size_t value) noexcept
         : value_(value)
     {
     }
 
-    // 提供一个访问原始值的方法，最好也是 constexpr 和 const
-    constexpr size_t count() const noexcept
-    {
-        return value_;
-    }
-
-    // 可以重载到 uint64_t 的隐式/显式转换，这里我们使用显式转换操作符
-    constexpr operator size_t() const noexcept
+    /**
+     *  @brief 允许 ImmutableMemorySize 对象隐式转换为 std::size_t
+     */
+    constexpr operator std::size_t() const
     {
         return value_;
     }

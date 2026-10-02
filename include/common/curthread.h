@@ -2,29 +2,29 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <thread>
 #include <unistd.h>
-#include <string>
 
-#include "alias.h"
-namespace CurThr{
+#include "XType.h"
+namespace CurThr {
 
-    auto getId()
-        -> std::jthread::id;
-    
-    auto GetName()
-        -> std::string;
+auto getId()
+    -> std::jthread::id;
 
-    auto SetName(std::string name)
-        -> void;
+auto GetName()
+    -> std::string;
 
-    // auto GetCurThrHandle()
-    //     -> Sptr<Thr::Thread>;
+auto SetName(std::string name)
+    -> void;
 
-    // auto SetCurThrName(std::string name)
-    //     -> void;
-    
-} //namespace CurThr
+// auto GetCurThrHandle()
+//     -> Sptr<Thr::Thread>;
+
+// auto SetCurThrName(std::string name)
+//     -> void;
+
+} // namespace CurThr
 
 namespace FiberT {
 class Fiber;
@@ -47,10 +47,8 @@ auto YieldToExcept()
 auto YieldToTerm()
     -> void;
 
-
 auto Resume(Sptr<Fiber> fiber)
     -> void;
-
 
 auto SetMainFiber(Sptr<Fiber> fiber)
     -> void;
@@ -69,7 +67,6 @@ void SetRunningFiber(Sptr<Fiber> f);
  */
 auto GetRunningFiber()
     -> Sptr<Fiber>;
-
 
 auto GetRawRunningFiber()
     -> Fiber*;

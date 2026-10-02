@@ -1,14 +1,13 @@
 #pragma once
-#include "common/alias.h"
 #include "PatternItemFacade.h"
+#include "common/alias.h"
 
 #include <cstddef>
 #include <list>
 #include <print>
 #include <utility>
 
-
-class LogEvent;
+class LogRecordView;
 
 /**
  * @details 模板参数说明:
@@ -39,10 +38,10 @@ public:
         startParse_();
     }
 
-    [[nodiscard]] auto format(const LogEvent& event) const
+    [[nodiscard]] auto format(const LogRecordView& event) const
         -> std::string;
 
-    auto format(std::ostream& os, const LogEvent& event) const
+    auto format(std::ostream& os, const LogRecordView& event) const
         -> size_t;
 
 private:
