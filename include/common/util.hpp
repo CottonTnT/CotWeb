@@ -1,17 +1,14 @@
 #pragma once
 
 // just for clangd
-#include "net/Callbacks.h"
 #include <concepts>
-#include <iterator>
-#include <memory>
 #include <utility>
 #define __cpp_lib_expected 1
 
 #include <cxxabi.h>
 #include <expected>
-#include <system_error>
 #include <iostream>
+#include <system_error>
 
 namespace UtilT {
 
@@ -24,10 +21,9 @@ auto SyscallWrapper(Scall scall, Args... args)
     -> std::expected<std::invoke_result_t<Scall, Args...>, std::string>
 {
     auto ret = scall(std::forward<Args>(args)...);
-    if (((ret == c_ErrorFlag) or ...))
-    {
-        auto ec = std::make_error_code(std::errc {errno});
-        return std::unexpected<std::string> {ec.message()};
+    if (((ret == c_ErrorFlag) or ...)) {
+        auto ec = std::make_error_code(std::errc { errno });
+        return std::unexpected<std::string> { ec.message() };
     }
     return ret;
 }
@@ -39,20 +35,20 @@ template <typename T>
 auto GetTypeName()
     -> std::string_view
 {
-    static auto s_TypeName = std::string_view {abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr)};
+    static auto s_TypeName = std::string_view { abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr) };
     return s_TypeName;
 }
 
 using Hash_t = std::uint64_t;
 
-inline constexpr Hash_t c_HashBase  = 0xCBF29CE484222325ULL;
+inline constexpr Hash_t c_HashBase = 0xCBF29CE484222325ULL;
 inline constexpr Hash_t c_HashPrime = 0x100000001B3ULL;
 
 /**
  * @brief FNV-1a hash
  *
  */
-constexpr inline auto cHashString(std::string_view str, Hash_t base = c_HashBase, Hash_t prime = c_HashPrime)
+constexpr auto hashString(std::string_view str, Hash_t base = c_HashBase, Hash_t prime = c_HashPrime)
     -> Hash_t
 {
 

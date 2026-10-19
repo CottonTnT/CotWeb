@@ -1,14 +1,14 @@
 #ifndef __SYLAR_NONCOPYABLE_GUARD__
 #define __SYLAR_NONCOPYABLE_GUARD__
 
-namespace Cot {
+namespace X {
 
 class NonCopyable {
 protected:
     /**
      * @brief 默认构造函数
      */
-    NonCopyable()  = default;
+    NonCopyable() = default;
     ~NonCopyable() = default;
 
 public:
@@ -19,9 +19,10 @@ public:
 };
 
 class NonCopyOrMoveable {
-protected: 
+protected:
     NonCopyOrMoveable() = default;
     ~NonCopyOrMoveable() = default;
+
 public:
     NonCopyOrMoveable(const NonCopyOrMoveable&) = delete;
     NonCopyOrMoveable& operator=(const NonCopyOrMoveable&) = delete;
@@ -29,6 +30,6 @@ public:
     NonCopyOrMoveable& operator=(NonCopyOrMoveable&&) = delete;
 };
 
-}
+} // namespace X
 
 #endif
